@@ -1,12 +1,30 @@
 {
-  "name": "api",
-  "module": "index.ts",
+  "name": "layersplit-api",
+  "version": "1.0.0",
   "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build src/index.ts --outdir dist",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "bunx prisma generate",
+    "db:push": "bunx prisma db push",
+    "db:migrate": "bunx prisma migrate dev"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "dependencies": {
+    "@mysten/sui": "^1.21.0",
+    "@prisma/client": "^6.3.1",
+    "cors": "^2.8.5",
+    "express": "^5.0.1",
+    "helmet": "^8.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "prisma": "^6.3.1",
+    "typescript": "^5.7.3"
   }
 }

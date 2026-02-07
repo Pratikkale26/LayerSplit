@@ -1,0 +1,96 @@
+// Prisma schema for LayerSplit
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users linked with Telegram
+model User {
+  id            String   @id @default(uuid())
+  telegramId    BigInt   @unique @map("telegram_id")
+  walletAddress String   @map("wallet_address")
+  username      String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  groupMemberships GroupMember[]
+  createdBills     Bill[]        @relation("BillCreator")
+  debtsOwed        Debt[]        @relation("Debtor")
+  debtsOwedToMe    Debt[]        @relation("Creditor")
+
+  @@map("users")
+}
+
+// Telegram groups
+model Group {
+  id              String   @id @default(uuid())
+  telegramGroupId BigInt   @unique @map("telegram_group_id")
+  name            String
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  members GroupMember[]
+  bills   Bill[]
+
+  @@map("groups")
+}
+
+// Group membership junction
+model GroupMember {
+  groupId String  @map("group_id")
+  userId  String  @map("user_id")
+  isAdmin Boolean @default(false) @map("is_admin")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@map("group_members")
+}
+
+// Bills (cache of on-chain data)
+model Bill {
+  id          String   @id @default(uuid())
+  suiObjectId String?  @unique @map("sui_object_id")
+  groupId     String?  @map("group_id")
+  creatorId   String   @map("creator_id")
+  title       String
+  totalAmount BigInt   @map("total_amount")
+  splitType   String   @map("split_type") // EQUAL, CUSTOM, DUTCH
+  isSettled   Boolean  @default(false) @map("is_settled")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  group   Group? @relation(fields: [groupId], references: [id])
+  creator User   @relation("BillCreator", fields: [creatorId], references: [id])
+  debts   Debt[]
+
+  @@index([groupId])
+  @@map("bills")
+}
+
+// Debts (cache of on-chain data)
+model Debt {
+  id              String   @id @default(uuid())
+  suiObjectId     String?  @unique @map("sui_object_id")
+  billId          String   @map("bill_id")
+  debtorId        String   @map("debtor_id")
+  creditorId      String   @map("creditor_id")
+  principalAmount BigInt   @map("principal_amount")
+  amountPaid      BigInt   @default(0) @map("amount_paid")
+  isSettled       Boolean  @default(false) @map("is_settled")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  bill     Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  debtor   User @relation("Debtor", fields: [debtorId], references: [id])
+  creditor User @relation("Creditor", fields: [creditorId], references: [id])
+
+  @@index([debtorId])
+  @@index([creditorId])
+  @@map("debts")
+}
