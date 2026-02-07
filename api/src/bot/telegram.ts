@@ -41,7 +41,7 @@ bot.start(async (ctx: Context) => {
                         [
                             {
                                 text: "🔗 Connect Wallet",
-                                web_app: { url: `${env.TMA_URL}/app?start=link` },
+                                web_app: { url: `${env.TMA_URL}/?start=link` },
                             },
                         ],
                     ],

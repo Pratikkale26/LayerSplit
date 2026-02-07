@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCurrentAccount, useConnectWallet, useWallets } from '@mysten/dapp-kit';
+import { useCurrentAccount, ConnectButton, useConnectWallet, useWallets } from '@mysten/dapp-kit';
 import { motion } from 'framer-motion';
 import { Wallet, Receipt, ArrowUpRight, ArrowDownLeft, Plus, History, Settings } from 'lucide-react';
 import Link from 'next/link';
@@ -18,8 +18,6 @@ interface DebtSummary {
 
 export default function DashboardPage() {
     const account = useCurrentAccount();
-    const wallets = useWallets();
-    const { mutate: connect } = useConnectWallet();
     const [summary, setSummary] = useState<DebtSummary | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -81,12 +79,6 @@ export default function DashboardPage() {
         return sui.toFixed(2);
     };
 
-    const handleConnect = () => {
-        if (wallets.length > 0) {
-            connect({ wallet: wallets[0] });
-        }
-    };
-
     if (loading) {
         return (
             <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
@@ -128,12 +120,11 @@ export default function DashboardPage() {
                             <p className="text-sm text-gray-400">Link your Sui wallet to get started</p>
                         </div>
                     </div>
-                    <button
-                        onClick={handleConnect}
-                        className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-600 font-medium transition"
-                    >
-                        Connect Wallet
-                    </button>
+                    {/* Use dapp-kit ConnectButton for proper wallet connection */}
+                    <ConnectButton
+                        connectText="Connect Wallet"
+                        className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-600 font-medium transition text-white"
+                    />
                 </motion.div>
             ) : (
                 <motion.div
