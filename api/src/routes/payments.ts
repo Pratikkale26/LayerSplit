@@ -1,248 +1,228 @@
-import { Router } from 'express';
-import type { Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
-import prisma from '../db/client.js';
-import type { ApiResponse, PtbResponse } from '../types/index.js';
-import { AppError } from '../middleware/error.js';
-import {
-    buildPayDebtFullPtb,
-    buildPayDebtPartialPtb,
-    calculateInterest,
-} from '../services/sui.js';
-import { CONTRACT } from '../config/env.js';
+import { Router } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
+import { prisma } from "../db/client.js";
+import type { ApiResponse, PtbResponse, InterestInfo } from "../types/index.js";
+import { AppError } from "../middleware/error.js";
+import { buildPayDebtPtb, calculateInterest } from "../services/sui";
 
 const router = Router();
 
 // Validation schemas
 const payDebtSchema = z.object({
     debtId: z.string(),
-    suiDebtObjectId: z.string(),
-    suiBillObjectId: z.string(),
-    paymentCoinId: z.string(),
-    payFull: z.boolean().default(true),
+    payerTelegramId: z.string(),
+    coinId: z.string(),
 });
 
 const confirmPaymentSchema = z.object({
     debtId: z.string(),
-    transactionDigest: z.string(),
+    txDigest: z.string(),
     amountPaid: z.string(),
-    suiDebtObjectId: z.string().optional(),
 });
 
-// POST /api/payments/pay - Generate PTB for single payment
-router.post('/pay', async (req: Request, res: Response<ApiResponse<PtbResponse>>, next: NextFunction) => {
-    try {
-        const body = payDebtSchema.parse(req.body);
+// GET /api/payments/interest/:debtId - Calculate interest
+router.get(
+    "/interest/:debtId",
+    async (
+        req: Request,
+        res: Response<ApiResponse<InterestInfo>>,
+        next: NextFunction
+    ) => {
+        try {
+            const { debtId } = req.params;
+            if (!debtId) throw new AppError("Debt ID required", 400);
 
-        // Verify debt exists
-        const debt = await prisma.debt.findUnique({
-            where: { id: body.debtId },
-            include: { bill: true },
-        });
-
-        if (!debt) {
-            throw new AppError('Debt not found', 404);
-        }
-
-        if (debt.isSettled) {
-            throw new AppError('Debt already settled', 400);
-        }
-
-        // Build PTB
-        const ptbBytes = body.payFull
-            ? buildPayDebtFullPtb({
-                debtId: body.suiDebtObjectId,
-                billId: body.suiBillObjectId,
-                paymentCoinId: body.paymentCoinId,
-            })
-            : buildPayDebtPartialPtb({
-                debtId: body.suiDebtObjectId,
-                billId: body.suiBillObjectId,
-                paymentCoinId: body.paymentCoinId,
+            const debt = await prisma.debt.findUnique({
+                where: { id: String(debtId) },
+                include: { bill: true },
             });
 
-        res.json({
-            success: true,
-            data: {
-                transactionBytes: ptbBytes,
-                message: body.payFull
-                    ? 'Full payment transaction ready. Sign to complete.'
-                    : 'Partial payment transaction ready. Sign to complete.',
-            },
-        });
-    } catch (error) {
-        next(error);
+            if (!debt) {
+                throw new AppError("Debt not found", 404);
+            }
+
+            const interestInfo = calculateInterest(
+                debt.principalAmount,
+                debt.amountPaid,
+                debt.createdAt
+            );
+
+            res.json({
+                success: true,
+                data: interestInfo,
+            });
+        } catch (error) {
+            next(error);
+        }
     }
-});
+);
 
-// POST /api/payments/pay-all - Generate PTB for batch payment
-router.post('/pay-all', async (req: Request, res: Response<ApiResponse<PtbResponse>>, next: NextFunction) => {
-    try {
-        const { telegramId } = req.body;
+// POST /api/payments/pay - Create payment PTB
+router.post(
+    "/pay",
+    async (
+        req: Request,
+        res: Response<ApiResponse<PtbResponse>>,
+        next: NextFunction
+    ) => {
+        try {
+            const body = payDebtSchema.parse(req.body);
 
-        // Find user
-        const user = await prisma.user.findUnique({
-            where: { telegramId: BigInt(telegramId) },
-        });
+            // Get debt
+            const debt = await prisma.debt.findUnique({
+                where: { id: body.debtId },
+                include: { creditor: true, debtor: true },
+            });
 
-        if (!user) {
-            throw new AppError('User not found', 404);
+            if (!debt) {
+                throw new AppError("Debt not found", 404);
+            }
+
+            if (debt.isSettled) {
+                throw new AppError("Debt already settled", 400);
+            }
+
+            // Calculate amount with interest
+            const interestInfo = calculateInterest(
+                debt.principalAmount,
+                debt.amountPaid,
+                debt.createdAt
+            );
+
+            // Build PTB
+            const ptbBytes = buildPayDebtPtb({
+                debtObjectId: debt.suiObjectId ?? "",
+                coinId: body.coinId,
+                amount: BigInt(interestInfo.total),
+                creditorAddress: debt.creditor.walletAddress,
+            });
+
+            res.json({
+                success: true,
+                data: {
+                    transactionBytes: ptbBytes,
+                    message: `Pay ${interestInfo.total} MIST (${interestInfo.principal} principal + ${interestInfo.interest} interest)`,
+                },
+            });
+        } catch (error) {
+            next(error);
         }
-
-        // Get all unsettled debts
-        const debts = await prisma.debt.findMany({
-            where: {
-                debtorId: user.id,
-                isSettled: false,
-                suiObjectId: { not: null },
-            },
-            include: { bill: true },
-        });
-
-        if (debts.length === 0) {
-            throw new AppError('No outstanding debts to pay', 400);
-        }
-
-        // Note: For batch payments, we'd need to build a more complex PTB
-        res.json({
-            success: true,
-            data: {
-                transactionBytes: '',
-                message: `Found ${debts.length} debts to pay. Batch payment PTB not yet implemented - pay individually.`,
-            },
-        });
-    } catch (error) {
-        next(error);
     }
-});
+);
 
-// POST /api/payments/confirm - Confirm payment was made on-chain
-router.post('/confirm', async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
-    try {
-        const body = confirmPaymentSchema.parse(req.body);
+// POST /api/payments/confirm - Confirm payment (after on-chain tx)
+router.post(
+    "/confirm",
+    async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
+        try {
+            const body = confirmPaymentSchema.parse(req.body);
 
-        const debt = await prisma.debt.findUnique({
-            where: { id: body.debtId },
-        });
+            const debt = await prisma.debt.findUnique({
+                where: { id: body.debtId },
+            });
 
-        if (!debt) {
-            throw new AppError('Debt not found', 404);
-        }
+            if (!debt) {
+                throw new AppError("Debt not found", 404);
+            }
 
-        const amountPaid = BigInt(body.amountPaid);
-        const newAmountPaid = debt.amountPaid + amountPaid;
-        const isSettled = newAmountPaid >= debt.principalAmount;
+            const newAmountPaid = debt.amountPaid + BigInt(body.amountPaid);
+            const isSettled = newAmountPaid >= debt.principalAmount;
 
-        // Update debt record
-        await prisma.debt.update({
-            where: { id: body.debtId },
-            data: {
-                amountPaid: newAmountPaid,
-                isSettled,
-                suiObjectId: body.suiDebtObjectId || debt.suiObjectId,
-            },
-        });
+            await prisma.debt.update({
+                where: { id: body.debtId },
+                data: {
+                    amountPaid: newAmountPaid,
+                    isSettled,
+                },
+            });
 
-        // Check if all debts for bill are settled
-        if (isSettled) {
+            // Check if all debts in bill are settled
             const bill = await prisma.bill.findUnique({
                 where: { id: debt.billId },
                 include: { debts: true },
             });
 
             if (bill) {
-                const allSettled = bill.debts.every((d: any) =>
-                    d.id === body.debtId ? true : d.isSettled
+                const allSettled = bill.debts.every(
+                    (d) => d.id === debt.id ? isSettled : d.isSettled
                 );
-
                 if (allSettled) {
                     await prisma.bill.update({
-                        where: { id: debt.billId },
+                        where: { id: bill.id },
                         data: { isSettled: true },
                     });
                 }
             }
-        }
 
-        res.json({
-            success: true,
-            data: {
-                debtId: body.debtId,
-                amountPaid: amountPaid.toString(),
-                totalPaid: newAmountPaid.toString(),
-                isSettled,
-                transactionDigest: body.transactionDigest,
-            },
-        });
-    } catch (error) {
-        next(error);
+            res.json({
+                success: true,
+                data: {
+                    message: isSettled ? "Debt fully settled!" : "Payment recorded",
+                    amountPaid: newAmountPaid.toString(),
+                    isSettled,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
     }
-});
+);
 
-// GET /api/payments/interest/:debtId - Calculate current interest
-router.get('/interest/:debtId', async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
-    try {
-        const debtId = req.params.debtId;
-        if (!debtId) throw new AppError('Debt ID required', 400);
+// GET /api/payments/history/:telegramId - Get payment history
+router.get(
+    "/history/:telegramId",
+    async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
+        try {
+            const { telegramId } = req.params;
+            if (!telegramId) throw new AppError("Telegram ID required", 400);
 
-        const debt = await prisma.debt.findUnique({
-            where: { id: debtId },
-            include: { bill: true },
-        });
+            const user = await prisma.user.findUnique({
+                where: { telegramId: BigInt(Number(telegramId)) },
+            });
 
-        if (!debt) {
-            throw new AppError('Debt not found', 404);
-        }
-
-        // If we have Sui object IDs, calculate on-chain
-        if (debt.suiObjectId && debt.bill.suiObjectId) {
-            try {
-                const result = await calculateInterest({
-                    debtId: debt.suiObjectId,
-                    billId: debt.bill.suiObjectId,
-                });
-
-                return res.json({
-                    success: true,
-                    data: {
-                        interest: result.interest.toString(),
-                        totalDue: result.totalDue.toString(),
-                        source: 'on-chain',
-                    },
-                });
-            } catch {
-                // Fall through to off-chain calculation
+            if (!user) {
+                throw new AppError("User not found", 404);
             }
+
+            // Get settled debts
+            const paidDebts = await prisma.debt.findMany({
+                where: { debtorId: user.id, isSettled: true },
+                include: { creditor: true, bill: true },
+                orderBy: { createdAt: "desc" },
+                take: 50,
+            });
+
+            const receivedDebts = await prisma.debt.findMany({
+                where: { creditorId: user.id, isSettled: true },
+                include: { debtor: true, bill: true },
+                orderBy: { createdAt: "desc" },
+                take: 50,
+            });
+
+            res.json({
+                success: true,
+                data: {
+                    paid: paidDebts.map((d) => ({
+                        id: d.id,
+                        amount: d.amountPaid.toString(),
+                        to: d.creditor.username ?? d.creditor.telegramId.toString(),
+                        billTitle: d.bill.title,
+                        date: d.createdAt,
+                    })),
+                    received: receivedDebts.map((d) => ({
+                        id: d.id,
+                        amount: d.amountPaid.toString(),
+                        from: d.debtor.username ?? d.debtor.telegramId.toString(),
+                        billTitle: d.bill.title,
+                        date: d.createdAt,
+                    })),
+                },
+            });
+        } catch (error) {
+            next(error);
         }
-
-        // Off-chain calculation
-        const now = Date.now();
-        const gracePeriodEnd = debt.bill.createdAt.getTime() + CONTRACT.GRACE_PERIOD_MS;
-
-        let interest = 0n;
-        if (now > gracePeriodEnd) {
-            const daysElapsed = Math.floor((now - gracePeriodEnd) / (24 * 60 * 60 * 1000));
-            // 1% per day = principal * days / 100
-            interest = (debt.principalAmount * BigInt(daysElapsed)) / 100n;
-        }
-
-        const totalDue = debt.principalAmount + interest - debt.amountPaid;
-
-        res.json({
-            success: true,
-            data: {
-                principal: debt.principalAmount.toString(),
-                amountPaid: debt.amountPaid.toString(),
-                interest: interest.toString(),
-                totalDue: totalDue.toString(),
-                gracePeriodEnd: new Date(gracePeriodEnd).toISOString(),
-                inGracePeriod: now <= gracePeriodEnd,
-                source: 'calculated',
-            },
-        });
-    } catch (error) {
-        next(error);
     }
-});
+);
 
 export default router;

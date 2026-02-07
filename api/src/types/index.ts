@@ -1,13 +1,11 @@
-// Shared types for the API
-
-// Request/Response types
+// API Response Types
 export interface ApiResponse<T = unknown> {
     success: boolean;
     data?: T;
     error?: string;
 }
 
-// User types
+// User Types
 export interface UserProfile {
     id: string;
     telegramId: string;
@@ -16,37 +14,23 @@ export interface UserProfile {
     createdAt: Date;
 }
 
-export interface LinkWalletRequest {
+export interface UserSummary {
+    id: string;
     telegramId: string;
-    walletAddress: string;
     username?: string;
 }
 
-// Group types
-export interface CreateGroupRequest {
+// Group Types
+export interface GroupResponse {
+    id: string;
     telegramGroupId: string;
     name: string;
-    adminTelegramId: string;
+    createdAt: Date;
+    memberCount: number;
 }
 
-export interface AddMemberRequest {
-    telegramId: string;
-}
-
-// Bill types
-export type SplitType = 'EQUAL' | 'CUSTOM' | 'DUTCH';
-
-export interface CreateBillRequest {
-    groupId?: string;
-    title: string;
-    description?: string;
-    totalAmount: string; // BigInt as string
-    splitType: SplitType;
-    debtors: {
-        telegramId: string;
-        amount?: string; // For custom split
-    }[];
-}
+// Bill Types
+export type SplitType = "EQUAL" | "CUSTOM" | "DUTCH";
 
 export interface BillResponse {
     id: string;
@@ -56,54 +40,30 @@ export interface BillResponse {
     splitType: SplitType;
     isSettled: boolean;
     createdAt: Date;
-    debts: DebtResponse[];
+    debts?: DebtResponse[];
 }
 
-// Debt types
+// Debt Types
 export interface DebtResponse {
     id: string;
     suiObjectId?: string;
     principalAmount: string;
     amountPaid: string;
     isSettled: boolean;
-    debtor: {
-        id: string;
-        telegramId: string;
-        username?: string;
-    };
-    creditor: {
-        id: string;
-        telegramId: string;
-        username?: string;
-    };
-}
-
-// Payment types
-export interface PayDebtRequest {
-    debtId: string;
-    suiDebtObjectId: string;
-    suiBillObjectId: string;
-    paymentCoinId: string;
-    payFull: boolean;
-}
-
-export interface PayAllRequest {
-    debts: {
-        debtId: string;
-        suiDebtObjectId: string;
-        suiBillObjectId: string;
-    }[];
-    paymentCoinId: string;
-}
-
-export interface ConfirmPaymentRequest {
-    debtId: string;
-    transactionDigest: string;
-    amountPaid: string;
+    debtor: UserSummary;
+    creditor: UserSummary;
 }
 
 // PTB Response
 export interface PtbResponse {
     transactionBytes: string;
     message: string;
+}
+
+// Interest Calculation
+export interface InterestInfo {
+    principal: string;
+    interest: string;
+    total: string;
+    daysOverdue: number;
 }

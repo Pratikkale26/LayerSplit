@@ -1,8 +1,8 @@
 {
-  "name": "layersplit-api",
-  "version": "1.0.0",
+  "name": "api",
+  "module": "src/index.ts",
   "type": "module",
-  "main": "src/index.ts",
+  "private": true,
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
@@ -12,21 +12,29 @@
     "db:push": "bunx prisma db push",
     "db:migrate": "bunx prisma migrate dev"
   },
-  "dependencies": {
-    "@mysten/sui": "^1.21.0",
-    "@prisma/adapter-libsql": "^7.3.0",
-    "@prisma/client": "^7.3.0",
-    "cors": "^2.8.5",
-    "express": "^5.0.1",
-    "helmet": "^8.0.0",
-    "telegraf": "^4.16.3",
-    "zod": "^3.24.1"
-  },
   "devDependencies": {
-    "@types/bun": "^1.2.2",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mysten/dapp-kit": "^1.0.1",
+    "@mysten/sui": "^2.3.1",
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "^7.3.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/helmet": "^0.0.48",
+    "@types/node": "^25.2.1",
+    "@types/pg": "^8.16.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "pg": "^8.18.0",
     "prisma": "^7.3.0",
-    "typescript": "^5.7.3"
+    "telegraf": "^4.16.3",
+    "zod": "^4.3.6"
   }
 }

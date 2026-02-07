@@ -1,37 +1,44 @@
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
-import { Transaction } from '@mysten/sui/transactions';
-import { env, CONTRACT } from '../config/env.js';
+import { Transaction } from "@mysten/sui/transactions";
+import { env } from "../config/env.js";
+import type { InterestInfo } from "../types/index.js";
 
-// Sui client singleton
-export const suiClient = new SuiClient({
-    url: getFullnodeUrl(env.SUI_NETWORK),
-});
+const PACKAGE_ID = env.PACKAGE_ID;
+const GRACE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+const DAILY_RATE_BPS = 100; // 1% per day = 100 basis points
 
-/**
- * Get the BillRegistry shared object ID
- * This is created when the package is published
- */
-export async function getRegistryObjectId(): Promise<string> {
-    // Query for BillRegistry objects owned by the package
-    const objects = await suiClient.getOwnedObjects({
-        owner: CONTRACT.PACKAGE_ID,
-        filter: {
-            StructType: `${CONTRACT.PACKAGE_ID}::types::BillRegistry`,
-        },
-    });
+// Calculate interest (1% per day after 3 day grace period)
+export function calculateInterest(
+    principalAmount: bigint,
+    amountPaid: bigint,
+    createdAt: Date
+): InterestInfo {
+    const remaining = principalAmount - amountPaid;
+    const now = Date.now();
+    const createdTime = createdAt.getTime();
+    const elapsed = now - createdTime;
 
-    if (objects.data.length === 0) {
-        throw new Error('BillRegistry not found. Make sure contract is deployed.');
+    let interest = BigInt(0);
+    let daysOverdue = 0;
+
+    if (elapsed > GRACE_PERIOD_MS) {
+        const overdueMs = elapsed - GRACE_PERIOD_MS;
+        daysOverdue = Math.floor(overdueMs / (24 * 60 * 60 * 1000));
+        // interest = principal * days * 1%
+        interest = (remaining * BigInt(daysOverdue) * BigInt(DAILY_RATE_BPS)) / BigInt(10000);
     }
 
-    return objects.data[0].data?.objectId || '';
+    const total = remaining + interest;
+
+    return {
+        principal: remaining.toString(),
+        interest: interest.toString(),
+        total: total.toString(),
+        daysOverdue,
+    };
 }
 
-/**
- * Build PTB for creating an equal split bill
- */
+// Build PTB for creating equal split bill
 export function buildCreateEqualSplitPtb(params: {
-    registryId: string;
     title: string;
     description: string;
     totalAmount: bigint;
@@ -40,26 +47,21 @@ export function buildCreateEqualSplitPtb(params: {
     const tx = new Transaction();
 
     tx.moveCall({
-        target: `${CONTRACT.PACKAGE_ID}::layersplit::create_bill_equal_split`,
+        target: `${PACKAGE_ID}::contract::create_equal_split`,
         arguments: [
-            tx.object(params.registryId),
-            tx.object('0x6'), // Clock object
-            tx.pure.vector('u8', Array.from(new TextEncoder().encode(params.title))),
-            tx.pure.vector('u8', Array.from(new TextEncoder().encode(params.description))),
+            tx.pure.string(params.title),
+            tx.pure.string(params.description),
             tx.pure.u64(params.totalAmount),
-            tx.pure.vector('address', params.debtors),
-            tx.pure.option('vector<u8>', null), // receipt_hash
+            tx.pure.vector("address", params.debtors),
         ],
     });
 
-    return tx.serialize();
+    // Return base64 encoded transaction bytes
+    return Buffer.from(tx.serialize()).toString("base64");
 }
 
-/**
- * Build PTB for creating a custom split bill
- */
+// Build PTB for creating custom split bill
 export function buildCreateCustomSplitPtb(params: {
-    registryId: string;
     title: string;
     description: string;
     totalAmount: bigint;
@@ -69,152 +71,40 @@ export function buildCreateCustomSplitPtb(params: {
     const tx = new Transaction();
 
     tx.moveCall({
-        target: `${CONTRACT.PACKAGE_ID}::layersplit::create_bill_custom_split`,
+        target: `${PACKAGE_ID}::contract::create_custom_split`,
         arguments: [
-            tx.object(params.registryId),
-            tx.object('0x6'), // Clock object
-            tx.pure.vector('u8', Array.from(new TextEncoder().encode(params.title))),
-            tx.pure.vector('u8', Array.from(new TextEncoder().encode(params.description))),
+            tx.pure.string(params.title),
+            tx.pure.string(params.description),
             tx.pure.u64(params.totalAmount),
-            tx.pure.vector('address', params.debtors),
-            tx.pure.vector('u64', params.amounts.map((a) => a)),
-            tx.pure.option('vector<u8>', null), // receipt_hash
+            tx.pure.vector("address", params.debtors),
+            tx.pure.vector("u64", params.amounts),
         ],
     });
 
-    return tx.serialize();
+    return Buffer.from(tx.serialize()).toString("base64");
 }
 
-/**
- * Build PTB for paying a debt in full
- */
-export function buildPayDebtFullPtb(params: {
-    debtId: string;
-    billId: string;
-    paymentCoinId: string;
+// Build PTB for paying a debt
+export function buildPayDebtPtb(params: {
+    debtObjectId: string;
+    coinId: string;
+    amount: bigint;
+    creditorAddress: string;
 }): string {
     const tx = new Transaction();
 
+    // Split coin for payment
+    const [paymentCoin] = tx.splitCoins(tx.object(params.coinId), [
+        tx.pure.u64(params.amount),
+    ]);
+
     tx.moveCall({
-        target: `${CONTRACT.PACKAGE_ID}::layersplit::pay_debt_full`,
+        target: `${PACKAGE_ID}::contract::pay_debt`,
         arguments: [
-            tx.object(params.debtId),
-            tx.object(params.billId),
-            tx.object('0x6'), // Clock
-            tx.object(params.paymentCoinId),
+            tx.object(params.debtObjectId),
+            paymentCoin,
         ],
     });
 
-    return tx.serialize();
-}
-
-/**
- * Build PTB for paying a debt partially
- */
-export function buildPayDebtPartialPtb(params: {
-    debtId: string;
-    billId: string;
-    paymentCoinId: string;
-}): string {
-    const tx = new Transaction();
-
-    tx.moveCall({
-        target: `${CONTRACT.PACKAGE_ID}::layersplit::pay_debt_partial`,
-        arguments: [
-            tx.object(params.debtId),
-            tx.object(params.billId),
-            tx.object('0x6'), // Clock
-            tx.object(params.paymentCoinId),
-        ],
-    });
-
-    return tx.serialize();
-}
-
-/**
- * Build PTB for canceling a debt (creator only)
- */
-export function buildCancelDebtPtb(params: {
-    debtId: string;
-    billId: string;
-}): string {
-    const tx = new Transaction();
-
-    tx.moveCall({
-        target: `${CONTRACT.PACKAGE_ID}::layersplit::cancel_debt`,
-        arguments: [
-            tx.object(params.debtId),
-            tx.object(params.billId),
-            tx.object('0x6'), // Clock
-        ],
-    });
-
-    return tx.serialize();
-}
-
-/**
- * Calculate interest for a debt on-chain (view function)
- */
-export async function calculateInterest(params: {
-    debtId: string;
-    billId: string;
-}): Promise<{ interest: bigint; totalDue: bigint }> {
-    const result = await suiClient.devInspectTransactionBlock({
-        sender: '0x0000000000000000000000000000000000000000000000000000000000000000',
-        transactionBlock: (() => {
-            const tx = new Transaction();
-            tx.moveCall({
-                target: `${CONTRACT.PACKAGE_ID}::layersplit::calculate_interest`,
-                arguments: [
-                    tx.object(params.debtId),
-                    tx.object(params.billId),
-                    tx.object('0x6'),
-                ],
-            });
-            return tx;
-        })(),
-    });
-
-    // Parse results from move call
-    if (result.results && result.results[0]?.returnValues) {
-        const [interestVal, totalDueVal] = result.results[0].returnValues;
-        return {
-            // @ts-ignore
-            interest: BigInt(interestVal[0] as string),
-            // @ts-ignore
-            totalDue: BigInt(totalDueVal[0] as string),
-        };
-    }
-
-    return { interest: 0n, totalDue: 0n };
-}
-
-/**
- * Get debt object details from chain
- */
-export async function getDebtObject(debtId: string) {
-    const object = await suiClient.getObject({
-        id: debtId,
-        options: {
-            showContent: true,
-            showType: true,
-        },
-    });
-
-    return object;
-}
-
-/**
- * Get bill object details from chain
- */
-export async function getBillObject(billId: string) {
-    const object = await suiClient.getObject({
-        id: billId,
-        options: {
-            showContent: true,
-            showType: true,
-        },
-    });
-
-    return object;
+    return Buffer.from(tx.serialize()).toString("base64");
 }
