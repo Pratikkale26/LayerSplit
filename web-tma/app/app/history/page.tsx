@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Receipt, ArrowUpRight, ArrowDownLeft, Calendar } from 'lucide-react';
+import { ArrowLeft, Receipt, ArrowUpRight, ArrowDownLeft, Calendar, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -14,6 +14,7 @@ interface Transaction {
     amount: string;
     counterparty?: string;
     date: string;
+    txDigest?: string;
 }
 
 export default function HistoryPage() {
@@ -21,6 +22,7 @@ export default function HistoryPage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'paid' | 'received'>('all');
     const [telegramUser, setTelegramUser] = useState<{ id: number } | null>(null);
+    const [error, setError] = useState('');
 
     useEffect(() => {
         if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
@@ -31,35 +33,57 @@ export default function HistoryPage() {
                 setTelegramUser(webapp.initDataUnsafe.user);
             }
         }
-
-        // Mock data for now
-        setTransactions([
-            {
-                id: '1',
-                type: 'paid',
-                title: 'Dinner Split',
-                amount: '25.50',
-                counterparty: '@john',
-                date: '2026-02-07',
-            },
-            {
-                id: '2',
-                type: 'received',
-                title: 'Movie Tickets',
-                amount: '15.00',
-                counterparty: '@alice',
-                date: '2026-02-05',
-            },
-            {
-                id: '3',
-                type: 'created',
-                title: 'Team Lunch',
-                amount: '120.00',
-                date: '2026-02-04',
-            },
-        ]);
-        setLoading(false);
     }, []);
+
+    // Fetch real transaction history when telegram user is available
+    useEffect(() => {
+        if (telegramUser?.id) {
+            fetchHistory();
+        } else {
+            setLoading(false);
+        }
+    }, [telegramUser]);
+
+    const fetchHistory = async () => {
+        if (!telegramUser?.id) return;
+
+        try {
+            setLoading(true);
+            setError('');
+
+            const response = await fetch(`${API_URL}/api/payments/history/${telegramUser.id}`);
+            const data = await response.json();
+
+            if (data.success && data.data) {
+                // Transform API data to Transaction format
+                const txs: Transaction[] = data.data.map((item: any) => ({
+                    id: item.id,
+                    type: item.type, // 'paid' or 'received'
+                    title: item.bill?.title || 'Payment',
+                    amount: formatSui(BigInt(item.amount || '0')),
+                    counterparty: item.counterparty?.username
+                        ? `@${item.counterparty.username}`
+                        : item.counterparty?.telegramId,
+                    date: new Date(item.createdAt).toISOString().split('T')[0],
+                    txDigest: item.transactionDigest,
+                }));
+                setTransactions(txs);
+            } else {
+                setTransactions([]);
+            }
+        } catch (err) {
+            console.error('Failed to fetch history:', err);
+            setError('Failed to load transaction history');
+            setTransactions([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatSui = (mist: bigint): string => {
+        const sui = Number(mist) / 1_000_000_000;
+        return sui.toFixed(2);
+    };
 
     const filteredTransactions = transactions.filter((t) => {
         if (filter === 'all') return true;
@@ -87,6 +111,14 @@ export default function HistoryPage() {
                 return 'from-blue-500/10 to-purple-500/10';
         }
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#0a0a0b] text-white pb-24">
@@ -118,12 +150,22 @@ export default function HistoryPage() {
                 </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+                <div className="mx-4 mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <p className="text-red-400 text-sm">{error}</p>
+                </div>
+            )}
+
             {/* Transactions List */}
             <div className="px-4 space-y-3">
                 {filteredTransactions.length === 0 ? (
                     <div className="text-center py-12">
                         <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-500" />
                         <p className="text-gray-400">No transactions yet</p>
+                        <p className="text-sm text-gray-500 mt-2">
+                            Your payment history will appear here
+                        </p>
                     </div>
                 ) : (
                     filteredTransactions.map((tx, index) => (
@@ -142,7 +184,9 @@ export default function HistoryPage() {
                                     <div>
                                         <p className="font-medium">{tx.title}</p>
                                         <p className="text-xs text-gray-400">
-                                            {tx.counterparty ? `${tx.type === 'paid' ? 'to' : 'from'} ${tx.counterparty}` : 'Created by you'}
+                                            {tx.counterparty
+                                                ? `${tx.type === 'paid' ? 'to' : 'from'} ${tx.counterparty}`
+                                                : 'Created by you'}
                                         </p>
                                     </div>
                                 </div>
@@ -155,6 +199,16 @@ export default function HistoryPage() {
                                     <p className="text-xs text-gray-500">{tx.date}</p>
                                 </div>
                             </div>
+                            {tx.txDigest && (
+                                <a
+                                    href={`https://suiscan.xyz/testnet/tx/${tx.txDigest}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-2 text-xs text-blue-400 hover:underline block"
+                                >
+                                    View on Explorer →
+                                </a>
+                            )}
                         </motion.div>
                     ))
                 )}
