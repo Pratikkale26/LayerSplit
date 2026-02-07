@@ -1,8 +1,7 @@
 'use client';
 
-import { Layers, Wallet } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 
 export function Navbar() {
@@ -25,13 +24,14 @@ export function Navbar() {
           <span className="text-xl font-bold text-white">LayerSplit</span>
         </div>
         {mounted && (
-          <Button
-            variant="outline"
-            className="border-[#4DA2FF]/30 bg-[#4DA2FF]/10 text-white hover:bg-[#4DA2FF]/20 hover:border-[#4DA2FF]/50"
+          <a
+            href="https://t.me/LayerSplit_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-[#4DA2FF]/30 bg-[#4DA2FF]/10 px-4 py-2 text-sm font-medium text-white hover:bg-[#4DA2FF]/20 hover:border-[#4DA2FF]/50 transition-colors"
           >
-            <Wallet className="mr-2 h-4 w-4" />
-            Connect Wallet
-          </Button>
+            Open in Telegram
+          </a>
         )}
       </div>
     </motion.nav>

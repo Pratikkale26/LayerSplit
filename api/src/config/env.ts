@@ -12,9 +12,9 @@ const envSchema = z.object({
     // Sui
     SUI_NETWORK: z.enum(['testnet', 'devnet', 'mainnet']).default('testnet'),
     PACKAGE_ID: z.string(),
-
-    // Optional: Telegram Bot Token (for webhook signature validation)
-    TELEGRAM_BOT_TOKEN: z.string().optional(),
+    // Telegram
+    TELEGRAM_BOT_TOKEN: z.string(),
+    TMA_URL: z.string().default('https://layersplit.vercel.app'),
 });
 
 // Parse and validate

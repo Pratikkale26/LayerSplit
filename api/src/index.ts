@@ -1,5 +1,6 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
+import { startBot } from './bot/telegram.js';
 
 const app = createApp();
 const PORT = parseInt(env.PORT, 10);
@@ -16,6 +17,11 @@ app.listen(PORT, () => {
 ║                                                    ║
 ╚════════════════════════════════════════════════════╝
   `);
+
+    // Start Telegram bot in polling mode (dev)
+    if (env.NODE_ENV !== 'production') {
+        startBot();
+    }
 });
 
 // Graceful shutdown

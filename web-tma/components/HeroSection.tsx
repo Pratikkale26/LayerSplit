@@ -1,8 +1,11 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
-import { Send, Sparkles } from 'lucide-react';
+import { Send, Sparkles, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+// Replace with your actual bot username
+const TELEGRAM_BOT_URL = 'https://t.me/LayerSplit_bot';
 
 export function HeroSection() {
   const reduceMotion = useReducedMotion();
@@ -25,7 +28,7 @@ export function HeroSection() {
         >
           <Sparkles className="h-4 w-4 text-[#4DA2FF]" />
           <span className="text-sm text-white/80">
-            Built on Sui · Instant settlements
+            Built on Sui · 365% APR on late payments
           </span>
         </motion.div>
 
@@ -39,7 +42,7 @@ export function HeroSection() {
           Split Bills.
           <br />
           <span className="bg-gradient-to-r from-[#4DA2FF] to-[#6BB5FF] bg-clip-text text-transparent">
-            Earn Yield.
+            Earn Interest.
           </span>
           <br />
           No Awkward Chasing.
@@ -53,7 +56,7 @@ export function HeroSection() {
           className="mb-10 max-w-3xl mx-auto text-lg sm:text-xl md:text-2xl text-white/70 leading-relaxed"
         >
           The social settlement layer on Sui.
-          Settle group expenses in any token — late payers fund the group.
+          Late payers pay 1% daily interest — creditors earn, everyone settles faster.
         </motion.p>
 
         {/* CTAs */}
@@ -63,23 +66,48 @@ export function HeroSection() {
           transition={{ duration: 0.6, delay: 0.3 }}
           className="flex flex-col sm:flex-row gap-4 justify-center items-center"
         >
-          <Button
-            size="lg"
-            className="group relative h-14 rounded-full bg-[#4DA2FF] px-8 text-lg font-semibold text-white transition-all hover:scale-[1.04] hover:bg-[#3D92EF] shadow-lg shadow-[#4DA2FF]/30"
-          >
-            <span className="flex items-center gap-2">
-              Launch on Telegram
-              <Send className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </span>
-          </Button>
+          <a href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">
+            <Button
+              size="lg"
+              className="group relative h-14 rounded-full bg-[#4DA2FF] px-8 text-lg font-semibold text-white transition-all hover:scale-[1.04] hover:bg-[#3D92EF] shadow-lg shadow-[#4DA2FF]/30"
+            >
+              <span className="flex items-center gap-2">
+                Launch on Telegram
+                <Send className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </span>
+            </Button>
+          </a>
 
-          <Button
-            size="lg"
-            variant="outline"
-            className="h-14 rounded-full border-white/20 px-8 text-lg text-white hover:bg-white/5 hover:border-[#4DA2FF]/50"
-          >
-            See how it works
-          </Button>
+          <a href="#how-it-works">
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-14 rounded-full border-white/20 px-8 text-lg text-white hover:bg-white/5 hover:border-[#4DA2FF]/50"
+            >
+              See how it works
+            </Button>
+          </a>
+        </motion.div>
+
+        {/* Stats */}
+        <motion.div
+          initial={!reduceMotion ? { y: 20, opacity: 0 } : false}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.45 }}
+          className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto"
+        >
+          <div className="text-center">
+            <p className="text-3xl font-bold text-white">365%</p>
+            <p className="text-sm text-white/50">APR on late payments</p>
+          </div>
+          <div className="text-center">
+            <p className="text-3xl font-bold text-white">3 days</p>
+            <p className="text-sm text-white/50">Grace period</p>
+          </div>
+          <div className="text-center">
+            <p className="text-3xl font-bold text-white">0 fees</p>
+            <p className="text-sm text-white/50">Platform takes nothing</p>
+          </div>
         </motion.div>
       </div>
     </section>
