@@ -1,0 +1,6 @@
+sui-stack-hello-world/
+build/*
+traces/*
+.trace
+.coverage*
+Pub.*.toml
