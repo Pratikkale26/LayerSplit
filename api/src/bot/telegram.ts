@@ -233,11 +233,15 @@ bot.command("split", async (ctx) => {
     );
 });
 
+// Track if bot is running
+let isRunning = false;
+
 // Start bot
 export function startBot() {
     bot
         .launch()
         .then(() => {
+            isRunning = true;
             console.log("🤖 Telegram bot started in polling mode");
         })
         .catch((err) => {
@@ -245,6 +249,15 @@ export function startBot() {
         });
 }
 
-// Graceful shutdown
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+// Graceful shutdown - only stop if bot is running
+const gracefulShutdown = (signal: string) => {
+    if (isRunning) {
+        console.log(`Received ${signal}, stopping bot...`);
+        bot.stop(signal);
+        isRunning = false;
+    }
+    process.exit(0);
+};
+
+process.once("SIGINT", () => gracefulShutdown("SIGINT"));
+process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
