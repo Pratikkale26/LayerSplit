@@ -41,7 +41,7 @@ bot.start(async (ctx: Context) => {
                         [
                             {
                                 text: "🔗 Connect Wallet",
-                                web_app: { url: `${env.TMA_URL}?start=link` },
+                                web_app: { url: `${env.TMA_URL}/app?start=link` },
                             },
                         ],
                     ],
@@ -156,7 +156,7 @@ bot.command("pay", async (ctx) => {
     await ctx.reply(`💳 You have ${debts.length} outstanding debt(s). Open the app to pay:`, {
         reply_markup: {
             inline_keyboard: [
-                [{ text: "💸 Pay Debts", web_app: { url: `${env.TMA_URL}/pay` } }],
+                [{ text: "💸 Pay Debts", web_app: { url: `${env.TMA_URL}/app/pay` } }],
             ],
         },
     });
@@ -188,7 +188,7 @@ bot.command("split", async (ctx) => {
     }
 
     if (!parts[0]) return console.error();
-    
+
     const amount = parseFloat(parts[0]);
     if (isNaN(amount) || amount <= 0) {
         await ctx.reply("❌ Invalid amount. Use a number like: `/split 25.5 Lunch`", {
@@ -223,7 +223,7 @@ bot.command("split", async (ctx) => {
                         {
                             text: "➕ Create Bill",
                             web_app: {
-                                url: `${env.TMA_URL}/create?amount=${amountMist}&title=${encodeURIComponent(description)}&groupId=${chatId}`,
+                                url: `${env.TMA_URL}/app/create?amount=${amountMist}&title=${encodeURIComponent(description)}&groupId=${chatId}`,
                             },
                         },
                     ],
