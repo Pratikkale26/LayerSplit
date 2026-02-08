@@ -20,6 +20,8 @@ export default function DashboardPage() {
     const account = useCurrentAccount();
     const [summary, setSummary] = useState<DebtSummary | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isLinking, setIsLinking] = useState(false);
+    const [linkError, setLinkError] = useState<string | null>(null);
 
     // Get Telegram user from WebApp
     const [telegramUser, setTelegramUser] = useState<{ id: number; username?: string } | null>(null);
@@ -37,6 +39,45 @@ export default function DashboardPage() {
         }
         setLoading(false);
     }, []);
+
+    // Link wallet to database when both account and telegramUser are available
+    useEffect(() => {
+        const linkWallet = async () => {
+            if (!account?.address || !telegramUser?.id) return;
+
+            setIsLinking(true);
+            setLinkError(null);
+
+            try {
+                const response = await fetch(`${API_URL}/api/users/link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegramId: telegramUser.id.toString(),
+                        walletAddress: account.address,
+                        username: telegramUser.username,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to link wallet');
+                }
+
+                console.log('Wallet linked successfully:', data.data);
+                // Fetch summary after successful linking
+                fetchSummary();
+            } catch (error: any) {
+                console.error('Failed to link wallet:', error);
+                setLinkError(error.message || 'Failed to link wallet');
+            } finally {
+                setIsLinking(false);
+            }
+        };
+
+        linkWallet();
+    }, [account?.address, telegramUser?.id]);
 
     // Fetch user summary when account is connected
     useEffect(() => {
@@ -133,16 +174,21 @@ export default function DashboardPage() {
                     className="mx-4 mt-6 p-4 rounded-2xl bg-white/5 border border-white/10"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-green-500/20">
-                            <Wallet className="w-5 h-5 text-green-400" />
+                        <div className={`p-2 rounded-lg ${linkError ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+                            <Wallet className={`w-5 h-5 ${linkError ? 'text-red-400' : 'text-green-400'}`} />
                         </div>
                         <div>
-                            <p className="text-sm text-gray-400">Connected</p>
+                            <p className="text-sm text-gray-400">
+                                {isLinking ? 'Linking...' : linkError ? 'Link Failed' : 'Connected'}
+                            </p>
                             <p className="font-mono text-sm">
                                 {account.address.slice(0, 8)}...{account.address.slice(-6)}
                             </p>
                         </div>
                     </div>
+                    {linkError && (
+                        <p className="mt-2 text-sm text-red-400">{linkError}</p>
+                    )}
                 </motion.div>
             )}
 
