@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useCurrentAccount, useSignAndExecuteTransaction, ConnectButton } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction, ConnectButton, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import { motion } from 'framer-motion';
 import { Check, Loader2, AlertCircle, FileText, Users, Wallet } from 'lucide-react';
@@ -32,6 +32,7 @@ function SignPageContent() {
     const searchParams = useSearchParams();
     const billId = searchParams.get('billId');
     const account = useCurrentAccount();
+    const suiClient = useSuiClient();
     const { mutateAsync: signAndExecute, isPending: isSigning } = useSignAndExecuteTransaction();
 
     const [bill, setBill] = useState<BillData | null>(null);
@@ -96,29 +97,39 @@ function SignPageContent() {
             console.log('Transaction result:', result);
 
             // Query transaction to get created objects (debt object IDs)
-            // The result.effects?.created contains new objects but may not have owner info
-            // For now, we'll send the digest and backend can update later
-            // or query the transaction effects using a SuiClient
-
-            // Try to extract created object IDs from result
             let debtObjectIds: { debtorAddress: string; objectId: string }[] = [];
 
-            // If result has objectChanges (from waitForTransaction), try to extract debt objects
-            const resultAny = result as any;
-            if (resultAny.objectChanges) {
-                // Filter for created Debt objects
-                const createdDebts = resultAny.objectChanges.filter((change: any) =>
-                    change.type === 'created' &&
-                    change.objectType?.includes('::types::Debt')
-                );
+            try {
+                // Wait for transaction and get full details with object changes
+                const txDetails = await suiClient.waitForTransaction({
+                    digest: result.digest,
+                    options: {
+                        showObjectChanges: true,
+                    },
+                });
 
-                // Map to debtObjectIds format
-                debtObjectIds = createdDebts.map((change: any) => ({
-                    debtorAddress: change.owner?.AddressOwner || '',
-                    objectId: change.objectId,
-                })).filter((d: any) => d.debtorAddress);
+                console.log('Transaction details:', txDetails);
 
-                console.log('Extracted debt object IDs:', debtObjectIds);
+                if (txDetails.objectChanges) {
+                    // Filter for created Debt objects
+                    const createdDebts = txDetails.objectChanges.filter((change: any) =>
+                        change.type === 'created' &&
+                        change.objectType?.includes('::types::Debt')
+                    );
+
+                    console.log('Created debts:', createdDebts);
+
+                    // Map to debtObjectIds format
+                    debtObjectIds = createdDebts.map((change: any) => ({
+                        debtorAddress: change.owner?.AddressOwner || '',
+                        objectId: change.objectId,
+                    })).filter((d: any) => d.debtorAddress);
+
+                    console.log('Extracted debt object IDs:', debtObjectIds);
+                }
+            } catch (queryErr) {
+                console.error('Failed to query transaction details:', queryErr);
+                // Continue anyway - backend will just not have debt object IDs
             }
 
             // Confirm with backend
