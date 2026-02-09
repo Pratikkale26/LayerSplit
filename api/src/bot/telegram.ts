@@ -83,6 +83,7 @@ bot.help(async (ctx) => {
         `/start - Welcome & wallet link\n` +
         `/status - View your debts & receivables\n` +
         `/pay - Open app to pay debts\n` +
+        `/dashboard - Open full dashboard\n` +
         `/split <amount> <description> - Create bill in groups\n` +
         `/help - Show this message\n\n` +
         `💡 *How it works:*\n` +
