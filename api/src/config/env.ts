@@ -10,6 +10,7 @@ const envSchema = z.object({
     CORS_ORIGIN: z.string().default("*"),
     TELEGRAM_BOT_TOKEN: z.string(),
     TMA_URL: z.string().default("https://artistic-marcelene-parodiable.ngrok-free.dev"),
+    BILL_REGISTRY_ID: z.string(), // Required for contract interaction
 });
 
 export const env = envSchema.parse(process.env);

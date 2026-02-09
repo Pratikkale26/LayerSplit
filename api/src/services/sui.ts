@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import type { InterestInfo } from "../types/index.js";
 
 const PACKAGE_ID = env.PACKAGE_ID;
+const BILL_REGISTRY_ID = env.BILL_REGISTRY_ID;
 const GRACE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 const DAILY_RATE_BPS = 100; // 1% per day = 100 basis points
 
@@ -46,14 +47,30 @@ export async function buildCreateEqualSplitPtb(params: {
 }): Promise<string> {
     const tx = new Transaction();
 
-    tx.moveCall({
-        target: `${PACKAGE_ID}::contract::create_equal_split`,
+    // Call create_equal_split and capture return values
+    const [bill, debts] = tx.moveCall({
+        target: `${PACKAGE_ID}::bill::create_equal_split`,
         arguments: [
+            tx.object(BILL_REGISTRY_ID),
+            tx.object("0x6"), // Clock
             tx.pure.string(params.title),
             tx.pure.string(params.description),
             tx.pure.u64(params.totalAmount),
             tx.pure.vector("address", params.debtors),
+            tx.pure.option("vector<u8>", null), // receipt_hash
         ],
+    });
+
+    // Share the bill (makes it accessible to all)
+    tx.moveCall({
+        target: `${PACKAGE_ID}::bill::share_bill`,
+        arguments: [bill!],
+    });
+
+    // Transfer debts to their respective debtors
+    tx.moveCall({
+        target: `${PACKAGE_ID}::bill::transfer_debts`,
+        arguments: [debts!],
     });
 
     // Return JSON string for API response
@@ -70,15 +87,31 @@ export async function buildCreateCustomSplitPtb(params: {
 }): Promise<string> {
     const tx = new Transaction();
 
-    tx.moveCall({
-        target: `${PACKAGE_ID}::contract::create_custom_split`,
+    // Call create_custom_split and capture return values
+    const [bill, debts] = tx.moveCall({
+        target: `${PACKAGE_ID}::bill::create_custom_split`,
         arguments: [
+            tx.object(BILL_REGISTRY_ID),
+            tx.object("0x6"),
             tx.pure.string(params.title),
             tx.pure.string(params.description),
             tx.pure.u64(params.totalAmount),
             tx.pure.vector("address", params.debtors),
             tx.pure.vector("u64", params.amounts),
+            tx.pure.option("vector<u8>", null),
         ],
+    });
+
+    // Share the bill
+    tx.moveCall({
+        target: `${PACKAGE_ID}::bill::share_bill`,
+        arguments: [bill!],
+    });
+
+    // Transfer debts to debtors
+    tx.moveCall({
+        target: `${PACKAGE_ID}::bill::transfer_debts`,
+        arguments: [debts!],
     });
 
     // Return JSON string for API response
