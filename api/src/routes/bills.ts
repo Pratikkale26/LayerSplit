@@ -320,4 +320,132 @@ router.delete(
     }
 );
 
+// GET /api/bills/:billId/sign - Get bill details for signing
+router.get(
+    "/:billId/sign",
+    async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
+        try {
+            const billId = req.params.billId as string;
+            if (!billId) throw new AppError("Bill ID required", 400);
+
+            const bill = await prisma.bill.findUnique({
+                where: { id: billId },
+                include: {
+                    creator: true,
+                    debts: { include: { debtor: true } },
+                },
+            }) as any;
+
+            if (!bill) {
+                throw new AppError("Bill not found", 404);
+            }
+
+            if (bill.suiObjectId) {
+                throw new AppError("Bill already confirmed on-chain", 400);
+            }
+
+            // Build PTB based on split type
+            const debtorAddresses = bill.debts.map((d: any) => d.debtor.walletAddress);
+            const debtorAmounts = bill.debts.map((d: any) => d.principalAmount);
+
+            let ptbBytes: string;
+            if (bill.splitType === "EQUAL") {
+                ptbBytes = buildCreateEqualSplitPtb({
+                    title: bill.title,
+                    description: "",
+                    totalAmount: bill.totalAmount,
+                    debtors: debtorAddresses,
+                });
+            } else {
+                ptbBytes = buildCreateCustomSplitPtb({
+                    title: bill.title,
+                    description: "",
+                    totalAmount: bill.totalAmount,
+                    debtors: debtorAddresses,
+                    amounts: debtorAmounts,
+                });
+            }
+
+            res.json({
+                success: true,
+                data: {
+                    id: bill.id,
+                    title: bill.title,
+                    totalAmount: bill.totalAmount.toString(),
+                    splitType: bill.splitType,
+                    creator: {
+                        id: bill.creator.id,
+                        telegramId: bill.creator.telegramId.toString(),
+                        username: bill.creator.username,
+                        walletAddress: bill.creator.walletAddress,
+                    },
+                    debts: bill.debts.map((d: any) => ({
+                        id: d.id,
+                        principalAmount: d.principalAmount.toString(),
+                        debtor: {
+                            id: d.debtor.id,
+                            telegramId: d.debtor.telegramId.toString(),
+                            username: d.debtor.username,
+                            walletAddress: d.debtor.walletAddress,
+                        },
+                    })),
+                    transactionBytes: ptbBytes,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// POST /api/bills/:billId/confirm - Confirm on-chain bill creation
+const confirmBillSchema = z.object({
+    transactionDigest: z.string(),
+    suiObjectId: z.string().optional(),
+});
+
+router.post(
+    "/:billId/confirm",
+    async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
+        try {
+            const billId = req.params.billId as string;
+            if (!billId) throw new AppError("Bill ID required", 400);
+
+            const body = confirmBillSchema.parse(req.body);
+
+            const bill = await prisma.bill.findUnique({
+                where: { id: billId },
+            });
+
+            if (!bill) {
+                throw new AppError("Bill not found", 404);
+            }
+
+            if (bill.suiObjectId) {
+                throw new AppError("Bill already confirmed", 400);
+            }
+
+            // Update bill with on-chain data
+            const updated = await prisma.bill.update({
+                where: { id: billId },
+                data: {
+                    suiObjectId: body.suiObjectId || body.transactionDigest,
+                },
+            });
+
+            res.json({
+                success: true,
+                data: {
+                    id: updated.id,
+                    suiObjectId: updated.suiObjectId,
+                    message: "Bill confirmed on-chain",
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
 export default router;
+

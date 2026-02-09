@@ -163,10 +163,12 @@ bot.command("pay", async (ctx) => {
 });
 
 // /split command (in groups)
+// Supports: /split 100 dinner @user1 @user2:40
 bot.command("split", async (ctx) => {
     const telegramId = ctx.from?.id;
     const chatId = ctx.chat?.id;
     const chatType = ctx.chat?.type;
+    const creatorUsername = ctx.from?.username;
 
     if (!telegramId || !chatId) return;
 
@@ -176,60 +178,190 @@ bot.command("split", async (ctx) => {
         return;
     }
 
-    // Parse command: /split 100 Dinner
+    // Parse command
     const text = ctx.message?.text ?? "";
-    const parts = text.split(" ").slice(1);
 
-    if (parts.length < 2) {
-        await ctx.reply("Usage: `/split <amount> <description>`\nExample: `/split 50 Pizza night`", {
-            parse_mode: "Markdown",
-        });
+    // Regex to parse: /split <amount> <description> @user1:amount @user2
+    const amountMatch = text.match(/^\/split\s+(\d+(?:\.\d+)?)/);
+    if (!amountMatch) {
+        await ctx.reply(
+            "📝 *Usage:*\n" +
+            "`/split <amount> <description> @user1 @user2`\n\n" +
+            "*Examples:*\n" +
+            "`/split 100 dinner @alice @bob` - Equal split\n" +
+            "`/split 100 dinner @alice:60 @bob:40` - Custom split",
+            { parse_mode: "Markdown" }
+        );
         return;
     }
 
-    if (!parts[0]) return console.error();
-
-    const amount = parseFloat(parts[0]);
+    const amount = parseFloat(amountMatch[1]!);
     if (isNaN(amount) || amount <= 0) {
-        await ctx.reply("❌ Invalid amount. Use a number like: `/split 25.5 Lunch`", {
-            parse_mode: "Markdown",
-        });
+        await ctx.reply("❌ Invalid amount. Use a positive number.");
         return;
     }
 
-    const description = parts.slice(1).join(" ");
-    const amountMist = BigInt(Math.floor(amount * 1_000_000_000));
+    // Extract @mentions with optional amounts: @username or @username:amount
+    const mentionRegex = /@(\w+)(?::(\d+(?:\.\d+)?))?/g;
+    const mentions: { username: string; amount?: number }[] = [];
+    let match;
 
-    // Check if user is linked
-    const user = await prisma.user.findUnique({
+    while ((match = mentionRegex.exec(text)) !== null) {
+        mentions.push({
+            username: match[1]!,
+            amount: match[2] ? parseFloat(match[2]) : undefined,
+        });
+    }
+
+    // Extract description (text between amount and first @mention, or after amount if no mentions)
+    const afterAmount = text.slice(amountMatch[0].length).trim();
+    const descriptionMatch = afterAmount.match(/^([^@]*)/);
+    const description = descriptionMatch?.[1]?.trim() || "Split bill";
+
+    // Check if creator is linked
+    const creator = await prisma.user.findUnique({
         where: { telegramId: BigInt(telegramId) },
     });
 
-    if (!user) {
-        await ctx.reply("❌ Link your wallet first with /start in DM");
+    if (!creator) {
+        await ctx.reply(
+            "❌ You need to link your wallet first!\n\n" +
+            "DM me with /start to connect your wallet.",
+            { parse_mode: "Markdown" }
+        );
         return;
     }
 
-    await ctx.reply(
-        `📝 *Create Bill*\n\n` +
-        `💵 Amount: ${amount} SUI\n` +
-        `📄 Description: ${description}\n\n` +
-        `Open the app to add participants and confirm:`,
-        {
-            parse_mode: "Markdown",
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: "➕ Create Bill",
-                            // Use url button instead of web_app for group chat compatibility
-                            url: `https://t.me/${ctx.botInfo?.username}?startapp=create_${amountMist}_${encodeURIComponent(description)}_${chatId}`,
-                        },
-                    ],
-                ],
-            },
+    // If no mentions, ask for confirmation (we'll add group member detection later)
+    if (mentions.length === 0) {
+        await ctx.reply(
+            "⚠️ Please mention users to split with:\n" +
+            "`/split 100 dinner @alice @bob`",
+            { parse_mode: "Markdown" }
+        );
+        return;
+    }
+
+    // Validate custom amounts if provided
+    const hasCustomAmounts = mentions.some(m => m.amount !== undefined);
+    if (hasCustomAmounts) {
+        const allHaveAmounts = mentions.every(m => m.amount !== undefined);
+        if (!allHaveAmounts) {
+            await ctx.reply(
+                "❌ If using custom amounts, specify for ALL users:\n" +
+                "`/split 100 dinner @alice:60 @bob:40`",
+                { parse_mode: "Markdown" }
+            );
+            return;
         }
-    );
+
+        const totalCustom = mentions.reduce((sum, m) => sum + (m.amount || 0), 0);
+        if (Math.abs(totalCustom - amount) > 0.01) {
+            await ctx.reply(
+                `❌ Custom amounts (${totalCustom}) don't match total (${amount})`,
+                { parse_mode: "Markdown" }
+            );
+            return;
+        }
+    }
+
+    // Look up mentioned users in database
+    const debtors: { userId?: string; username: string; walletAddress?: string; amount: bigint }[] = [];
+    const unlinkedUsers: string[] = [];
+    const amountMist = BigInt(Math.floor(amount * 1_000_000_000));
+    const equalShare = amountMist / BigInt(mentions.length);
+
+    for (const mention of mentions) {
+        const user = await prisma.user.findFirst({
+            where: { username: mention.username },
+        });
+
+        const debtorAmount = hasCustomAmounts
+            ? BigInt(Math.floor(mention.amount! * 1_000_000_000))
+            : equalShare;
+
+        if (user) {
+            debtors.push({
+                userId: user.id,
+                username: mention.username,
+                walletAddress: user.walletAddress,
+                amount: debtorAmount,
+            });
+        } else {
+            unlinkedUsers.push(mention.username);
+            debtors.push({
+                username: mention.username,
+                amount: debtorAmount,
+            });
+        }
+    }
+
+    // Create bill in database with PENDING status
+    // Note: We don't set groupId because it requires a Group table record
+    // The chatId is tracked separately or can be stored in metadata later
+    const bill = await prisma.bill.create({
+        data: {
+            // groupId is omitted to avoid foreign key constraint
+            creatorId: creator.id,
+            title: description || "Split bill",
+            totalAmount: amountMist,
+            splitType: hasCustomAmounts ? "CUSTOM" : "EQUAL",
+            isSettled: false,
+            // suiObjectId will be set after on-chain confirmation
+        },
+    });
+
+    // Create debt records for linked users only
+    for (const debtor of debtors) {
+        if (debtor.userId) {
+            await prisma.debt.create({
+                data: {
+                    billId: bill.id,
+                    debtorId: debtor.userId,
+                    creditorId: creator.id,
+                    principalAmount: debtor.amount,
+                },
+            });
+        }
+    }
+
+    // Build confirmation message
+    let confirmMsg = `📝 *Bill Created*\n\n`;
+    confirmMsg += `💵 *Amount:* ${amount} SUI\n`;
+    confirmMsg += `📄 *Description:* ${description}\n`;
+    confirmMsg += `👥 *Split with:*\n`;
+
+    for (const debtor of debtors) {
+        const shareAmount = Number(debtor.amount) / 1_000_000_000;
+        const status = debtor.userId ? "✅" : "⏳";
+        confirmMsg += `  ${status} @${debtor.username}: ${shareAmount.toFixed(2)} SUI\n`;
+    }
+
+    if (unlinkedUsers.length > 0) {
+        confirmMsg += `\n⚠️ _${unlinkedUsers.join(", ")} need to link wallets_\n`;
+    }
+
+    confirmMsg += `\n👆 Click below to sign the on-chain transaction:`;
+
+    // Get bot username for deep link
+    const botUsername = ctx.botInfo?.username || 'layersplit_bot';
+
+    // Send confirmation with signing button
+    // Using TMA deep link format: opens TMA inside Telegram
+    await ctx.reply(confirmMsg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+            inline_keyboard: [
+                [
+                    {
+                        text: "✍️ Sign & Create On-Chain",
+                        // TMA deep link format - opens Mini App inside Telegram
+                        url: `https://t.me/${botUsername}?startapp=sign_${bill.id}`,
+                    },
+                ],
+            ],
+        },
+    });
 });
 
 // Track if bot is running

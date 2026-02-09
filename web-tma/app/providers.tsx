@@ -4,12 +4,13 @@ import { ReactNode, useEffect, useState } from 'react';
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
-import '@mysten/dapp-kit/dist/index.css'; // Don't forget the CSS for the modal!
+import '@mysten/dapp-kit/dist/index.css';
 
 const { networkConfig } = createNetworkConfig({
   testnet: { url: getJsonRpcFullnodeUrl('testnet'), network: 'testnet' },
   mainnet: { url: getJsonRpcFullnodeUrl('mainnet'), network: 'mainnet' },
 });
+
 const queryClient = new QueryClient();
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -17,7 +18,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    
+
     // Telegram specific initialization
     if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
       const tg = (window as any).Telegram.WebApp;
@@ -31,13 +32,19 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
-        {/* STRICT ADVICE: 
-            Drop manual registration. Slush and Phantom should be 
-            detected automatically if they are installed in the browser.
-            If this is for TMA, remember: desktop extensions don't work in mobile.
+        {/* 
+          For TMA (Telegram Mini App):
+          - Browser extension wallets (Sui Wallet, Phantom desktop) don't work
+          - Only web-based wallets that use popup/redirect work
+          - Slush Web Wallet is the best option for TMA
+          
+          The slushWallet prop enables Slush Web Wallet connection via iframe/popup
         */}
-        <WalletProvider 
-          autoConnect 
+        <WalletProvider
+          autoConnect
+          slushWallet={{
+            name: 'LayerSplit',
+          }}
         >
           {children}
         </WalletProvider>

@@ -20,10 +20,28 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       const telegram = (window as any).Telegram?.WebApp;
       if (telegram?.initData && telegram.initData.length > 0) {
-        // We're in Telegram - redirect to TMA dashboard
+        // We're in Telegram
         telegram.ready();
         telegram.expand();
         setIsTelegram(true);
+
+        // Check for startapp parameter (deep link)
+        const startParam = telegram.initDataUnsafe?.start_param;
+        if (startParam) {
+          // Handle sign_billId format
+          if (startParam.startsWith('sign_')) {
+            const billId = startParam.replace('sign_', '');
+            router.replace(`/app/sign?billId=${billId}`);
+            return;
+          }
+          // Handle create flow (for future use)
+          if (startParam.startsWith('create_')) {
+            router.replace(`/app/create?${startParam}`);
+            return;
+          }
+        }
+
+        // Default: go to TMA dashboard
         router.replace('/app');
       } else {
         // Not in Telegram - show landing page
