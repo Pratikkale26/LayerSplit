@@ -178,6 +178,49 @@ export default function PayPage() {
                 </motion.div>
             )}
 
+            {/* Pay All Summary Card */}
+            {debts.length > 0 && (
+                <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mx-4 mt-6 p-5 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/10 border border-blue-500/20"
+                >
+                    <div className="flex justify-between items-center mb-3">
+                        <div>
+                            <p className="text-gray-400 text-sm">Total Outstanding</p>
+                            <p className="text-2xl font-bold text-white">
+                                {formatSui(
+                                    debts.reduce((sum, d) => {
+                                        const amount = d.interest?.totalDue || d.principalAmount;
+                                        return (BigInt(sum) + BigInt(amount)).toString();
+                                    }, '0')
+                                )} SUI
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-gray-400 text-sm">{debts.length} debt(s)</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            // Pay debts one by one
+                            debts.forEach(debt => handlePay(debt));
+                        }}
+                        disabled={isPending || !account}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                        {isPending ? (
+                            <span className="flex items-center justify-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Processing...
+                            </span>
+                        ) : (
+                            '💸 Pay All Debts'
+                        )}
+                    </button>
+                </motion.div>
+            )}
+
             {/* Debts List */}
             <div className="px-4 mt-6 space-y-4">
                 {debts.length === 0 ? (

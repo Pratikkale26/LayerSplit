@@ -59,15 +59,17 @@ model GroupMember {
 
 // Bills (cache of on-chain data)
 model Bill {
-  id          String   @id @default(uuid())
-  suiObjectId String?  @unique @map("sui_object_id")
-  groupId     String?  @map("group_id")
-  creatorId   String   @map("creator_id")
-  title       String
-  totalAmount BigInt   @map("total_amount")
-  splitType   String   @map("split_type") // EQUAL, CUSTOM, DUTCH
-  isSettled   Boolean  @default(false) @map("is_settled")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id                String   @id @default(uuid())
+  suiObjectId       String?  @unique @map("sui_object_id")
+  transactionDigest String?  @map("transaction_digest")
+  groupId           String?  @map("group_id")
+  telegramChatId    BigInt?  @map("telegram_chat_id") // For sending feedback
+  creatorId         String   @map("creator_id")
+  title             String
+  totalAmount       BigInt   @map("total_amount")
+  splitType         String   @map("split_type") // EQUAL, CUSTOM, DUTCH
+  isSettled         Boolean  @default(false) @map("is_settled")
+  createdAt         DateTime @default(now()) @map("created_at")
 
   // Relations
   group   Group? @relation(fields: [groupId], references: [id])

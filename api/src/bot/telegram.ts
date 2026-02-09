@@ -133,6 +133,7 @@ bot.command("status", async (ctx) => {
 // /pay command
 bot.command("pay", async (ctx) => {
     const telegramId = ctx.from?.id;
+    const chatType = ctx.chat?.type;
     if (!telegramId) return;
 
     const user = await prisma.user.findUnique({
@@ -153,10 +154,67 @@ bot.command("pay", async (ctx) => {
         return;
     }
 
+    // web_app buttons only work in private chats
+    if (chatType !== "private") {
+        await ctx.reply(`💳 You have ${debts.length} outstanding debt(s). Check your DM to pay!`);
+        try {
+            await bot.telegram.sendMessage(
+                telegramId,
+                `💳 You have ${debts.length} outstanding debt(s). Open the app to pay:`,
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: "💸 Pay Debts", web_app: { url: `${env.TMA_URL}/app/pay` } }],
+                        ],
+                    },
+                }
+            );
+        } catch (e) {
+            await ctx.reply("⚠️ Couldn't DM you! Please start me first with /start in DM.");
+        }
+        return;
+    }
+
     await ctx.reply(`💳 You have ${debts.length} outstanding debt(s). Open the app to pay:`, {
         reply_markup: {
             inline_keyboard: [
                 [{ text: "💸 Pay Debts", web_app: { url: `${env.TMA_URL}/app/pay` } }],
+            ],
+        },
+    });
+});
+
+// /dashboard command - opens TMA dashboard
+bot.command("dashboard", async (ctx) => {
+    const telegramId = ctx.from?.id;
+    const chatType = ctx.chat?.type;
+    if (!telegramId) return;
+
+    // web_app buttons only work in private chats
+    if (chatType !== "private") {
+        await ctx.reply("📊 Check your DM to open the Dashboard!");
+        try {
+            await bot.telegram.sendMessage(
+                telegramId,
+                "📊 Open your LayerSplit Dashboard:",
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: "📊 Dashboard", web_app: { url: `${env.TMA_URL}/app` } }],
+                        ],
+                    },
+                }
+            );
+        } catch (e) {
+            await ctx.reply("⚠️ Couldn't DM you! Please start me first with /start in DM.");
+        }
+        return;
+    }
+
+    await ctx.reply("📊 Open your LayerSplit Dashboard:", {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "📊 Dashboard", web_app: { url: `${env.TMA_URL}/app` } }],
             ],
         },
     });
@@ -298,10 +356,11 @@ bot.command("split", async (ctx) => {
 
     // Create bill in database with PENDING status
     // Note: We don't set groupId because it requires a Group table record
-    // The chatId is tracked separately or can be stored in metadata later
+    // telegramChatId is saved to send feedback after signing
     const bill = await prisma.bill.create({
         data: {
             // groupId is omitted to avoid foreign key constraint
+            telegramChatId: BigInt(chatId),
             creatorId: creator.id,
             title: description || "Split bill",
             totalAmount: amountMist,

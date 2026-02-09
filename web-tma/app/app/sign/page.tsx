@@ -130,6 +130,7 @@ function SignPageContent() {
     }
 
     if (success) {
+        const explorerUrl = `https://suiscan.xyz/testnet/tx/${txDigest}`;
         return (
             <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center p-4">
                 <motion.div
@@ -144,9 +145,14 @@ function SignPageContent() {
                     <p className="text-gray-400 text-sm mb-4">
                         Transaction confirmed successfully
                     </p>
-                    <code className="block text-xs text-gray-500 bg-black/30 rounded p-2 break-all">
-                        {txDigest.slice(0, 20)}...{txDigest.slice(-10)}
-                    </code>
+                    <a
+                        href={explorerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-blue-400 bg-black/30 rounded p-2 break-all hover:bg-black/50 transition-colors"
+                    >
+                        🔗 View on Suiscan: {txDigest.slice(0, 16)}...
+                    </a>
                     <p className="text-gray-500 text-xs mt-4">Closing automatically...</p>
                 </motion.div>
             </div>

@@ -435,6 +435,12 @@ router.post(
 
             const bill = await prisma.bill.findUnique({
                 where: { id: billId },
+                include: {
+                    creator: true,
+                    debts: {
+                        include: { debtor: true },
+                    },
+                },
             });
 
             if (!bill) {
@@ -450,14 +456,54 @@ router.post(
                 where: { id: billId },
                 data: {
                     suiObjectId: body.suiObjectId || body.transactionDigest,
+                    transactionDigest: body.transactionDigest,
                 },
             });
+
+            // Send Telegram notifications
+            const { bot } = await import("../bot/telegram.js");
+            const txnHash = body.transactionDigest;
+            const explorerUrl = `https://suiscan.xyz/testnet/tx/${txnHash}`;
+            const totalSui = Number(bill.totalAmount) / 1_000_000_000;
+
+            const successMessage =
+                `✅ *Bill Signed On-Chain!*\n\n` +
+                `📄 *${bill.title}*\n` +
+                `💵 Amount: ${totalSui.toFixed(2)} SUI\n` +
+                `👥 Debtors: ${bill.debts.length}\n\n` +
+                `🔗 [View on Suiscan](${explorerUrl})\n` +
+                `📝 \`${txnHash.slice(0, 20)}...\``;
+
+            // Send to group chat (if exists)
+            if (bill.telegramChatId) {
+                try {
+                    await bot.telegram.sendMessage(
+                        bill.telegramChatId.toString(),
+                        successMessage,
+                        { parse_mode: "Markdown", link_preview_options: { is_disabled: true } }
+                    );
+                } catch (e) {
+                    console.error("Failed to send group notification:", e);
+                }
+            }
+
+            // Send DM to creator
+            try {
+                await bot.telegram.sendMessage(
+                    bill.creator.telegramId.toString(),
+                    successMessage,
+                    { parse_mode: "Markdown", link_preview_options: { is_disabled: true } }
+                );
+            } catch (e) {
+                console.error("Failed to send DM notification:", e);
+            }
 
             res.json({
                 success: true,
                 data: {
                     id: updated.id,
                     suiObjectId: updated.suiObjectId,
+                    transactionDigest: updated.transactionDigest,
                     message: "Bill confirmed on-chain",
                 },
             });
