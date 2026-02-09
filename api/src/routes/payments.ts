@@ -132,6 +132,7 @@ router.post(
 
             const debt = await prisma.debt.findUnique({
                 where: { id: body.debtId },
+                include: { debtor: true, creditor: true, bill: true },
             });
 
             if (!debt) {
@@ -165,6 +166,31 @@ router.post(
                         data: { isSettled: true },
                     });
                 }
+            }
+
+            // Send Telegram notification to creditor
+            try {
+                const { bot } = await import("../bot/telegram.js");
+                const amountSui = Number(body.amountPaid) / 1_000_000_000;
+                const debtorName = debt.debtor.username ? `@${debt.debtor.username}` : `User ${debt.debtor.telegramId}`;
+                const explorerUrl = `https://suiscan.xyz/testnet/tx/${body.txDigest}`;
+
+                const paymentMessage =
+                    `💰 *Payment Received!*\n\n` +
+                    `📄 *${debt.bill.title}*\n` +
+                    `👤 From: ${debtorName}\n` +
+                    `💵 Amount: ${amountSui.toFixed(2)} SUI\n` +
+                    `${isSettled ? '✅ Debt fully settled!' : '⏳ Partial payment'}\n\n` +
+                    `🔗 [View on Suiscan](${explorerUrl})`;
+
+                await bot.telegram.sendMessage(
+                    debt.creditor.telegramId.toString(),
+                    paymentMessage,
+                    { parse_mode: "Markdown", link_preview_options: { is_disabled: true } }
+                );
+            } catch (notifyErr) {
+                console.error("Failed to send payment notification:", notifyErr);
+                // Don't fail the request if notification fails
             }
 
             res.json({
