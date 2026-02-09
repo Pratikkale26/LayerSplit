@@ -134,8 +134,9 @@ export async function buildPayDebtPtb(params: {
 
     // Call pay_debt_full which requires: debt, bill, clock, payment_coin
     // Returns PaymentReceipt which we need to transfer
+    console.log('[buildPayDebtPtb] Adding moveCall for pay_debt_full');
     const [receipt] = tx.moveCall({
-        target: `${PACKAGE_ID}::contract::pay_debt_full`,
+        target: `${PACKAGE_ID}::layersplit::pay_debt_full`,
         arguments: [
             tx.object(params.debtObjectId),    // &mut Debt
             tx.object(params.billObjectId),    // &mut Bill  
