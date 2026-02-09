@@ -88,7 +88,14 @@ router.post(
             let ptbBytes: string;
 
             if (body.splitType === "EQUAL") {
-                ptbBytes = buildCreateEqualSplitPtb({
+                console.log("Building Equal Split PTB with:", {
+                    title: body.title,
+                    description: body.description,
+                    totalAmount,
+                    debtors: debtorAddresses,
+                    packageId: process.env.PACKAGE_ID
+                });
+                ptbBytes = await buildCreateEqualSplitPtb({
                     title: body.title,
                     description: body.description ?? "",
                     totalAmount,
@@ -98,7 +105,7 @@ router.post(
                 if (debtorAmounts.length !== debtorAddresses.length) {
                     throw new AppError("Custom split requires amount for each debtor", 400);
                 }
-                ptbBytes = buildCreateCustomSplitPtb({
+                ptbBytes = await buildCreateCustomSplitPtb({
                     title: body.title,
                     description: body.description ?? "",
                     totalAmount,
@@ -348,16 +355,29 @@ router.get(
             const debtorAddresses = bill.debts.map((d: any) => d.debtor.walletAddress);
             const debtorAmounts = bill.debts.map((d: any) => d.principalAmount);
 
+            // Validate addresses
+            if (debtorAddresses.length === 0) {
+                console.error("No linked debtors found for bill:", billId);
+                throw new AppError("No linked debtors found. Everyone must link their wallet first.", 400);
+            }
+
+            if (debtorAddresses.some((addr: string) => !addr || !addr.startsWith("0x") || addr.length < 60)) {
+                console.error("Invalid debtor addresses found:", debtorAddresses);
+                throw new AppError("Some debtors have not linked their wallets or have invalid addresses", 400);
+            }
+
+            console.log("Building PTB with valid debtor addresses:", debtorAddresses);
+
             let ptbBytes: string;
             if (bill.splitType === "EQUAL") {
-                ptbBytes = buildCreateEqualSplitPtb({
+                ptbBytes = await buildCreateEqualSplitPtb({
                     title: bill.title,
                     description: "",
                     totalAmount: bill.totalAmount,
                     debtors: debtorAddresses,
                 });
             } else {
-                ptbBytes = buildCreateCustomSplitPtb({
+                ptbBytes = await buildCreateCustomSplitPtb({
                     title: bill.title,
                     description: "",
                     totalAmount: bill.totalAmount,

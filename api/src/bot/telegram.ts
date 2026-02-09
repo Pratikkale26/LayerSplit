@@ -339,13 +339,17 @@ bot.command("split", async (ctx) => {
 
     if (unlinkedUsers.length > 0) {
         confirmMsg += `\n⚠️ _${unlinkedUsers.join(", ")} need to link wallets_\n`;
+        confirmMsg += `\n❌ *Cannot create on-chain bill until everyone links their wallet.*`;
+
+        await ctx.reply(confirmMsg, { parse_mode: "Markdown" });
+        return; // Stop here - don't send signing button
     }
 
+    // Only proceed to sending signing button if everyone is linked
+    confirmMsg += `\n\n📩 _Check your DM to sign the transaction!_`;
+
     // Reply in group with bill details
-    await ctx.reply(
-        confirmMsg + `\n\n📩 _Check your DM to sign the transaction!_`,
-        { parse_mode: "Markdown" }
-    );
+    await ctx.reply(confirmMsg, { parse_mode: "Markdown" });
 
     // Send DM with web_app button (web_app buttons ONLY work in private chats)
     try {

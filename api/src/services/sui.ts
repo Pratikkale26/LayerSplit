@@ -38,12 +38,12 @@ export function calculateInterest(
 }
 
 // Build PTB for creating equal split bill
-export function buildCreateEqualSplitPtb(params: {
+export async function buildCreateEqualSplitPtb(params: {
     title: string;
     description: string;
     totalAmount: bigint;
     debtors: string[];
-}): string {
+}): Promise<string> {
     const tx = new Transaction();
 
     tx.moveCall({
@@ -56,18 +56,18 @@ export function buildCreateEqualSplitPtb(params: {
         ],
     });
 
-    // Return base64 encoded transaction bytes
-    return Buffer.from(tx.serialize()).toString("base64");
+    // Return JSON string for API response
+    return JSON.stringify(await tx.toJSON());
 }
 
 // Build PTB for creating custom split bill
-export function buildCreateCustomSplitPtb(params: {
+export async function buildCreateCustomSplitPtb(params: {
     title: string;
     description: string;
     totalAmount: bigint;
     debtors: string[];
     amounts: bigint[];
-}): string {
+}): Promise<string> {
     const tx = new Transaction();
 
     tx.moveCall({
@@ -81,7 +81,8 @@ export function buildCreateCustomSplitPtb(params: {
         ],
     });
 
-    return Buffer.from(tx.serialize()).toString("base64");
+    // Return JSON string for API response
+    return JSON.stringify(await tx.toJSON());
 }
 
 // Build PTB for paying a debt
