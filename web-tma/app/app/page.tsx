@@ -5,9 +5,7 @@ import { useCurrentAccount, ConnectButton, useSignPersonalMessage } from '@myste
 import { motion } from 'framer-motion';
 import { Wallet, Receipt, ArrowUpRight, ArrowDownLeft, Plus, History, Settings, Shield, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-
-// API base URL
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { userApi } from '@/lib/api';
 
 interface DebtSummary {
     totalOwed: string;
@@ -49,8 +47,8 @@ export default function DashboardPage() {
             if (!telegramUser?.id) return;
 
             try {
-                const response = await fetch(`${API_URL}/api/users/${telegramUser.id}`);
-                const data = await response.json();
+                const response = await userApi.getProfile(telegramUser.id);
+                const data = response.data;
 
                 if (data.success && data.data?.walletAddress) {
                     // User exists and has wallet linked
@@ -83,7 +81,8 @@ export default function DashboardPage() {
 
         try {
             // Create a message to sign
-            const message = `Verify wallet ownership for LayerSplit\n\nTelegram ID: ${telegramUser.id}\nWallet: ${account.address}\nTimestamp: ${Date.now()}`;
+            const timestamp = Date.now();
+            const message = `Verify wallet ownership for LayerSplit\n\nTelegram ID: ${telegramUser.id}\nWallet: ${account.address}\nTimestamp: ${timestamp}`;
 
             // Ask user to sign the message
             const { signature } = await signMessage({
@@ -92,30 +91,25 @@ export default function DashboardPage() {
 
             console.log('Signature obtained:', signature);
 
-            // Call API to link wallet (signature proves ownership)
-            const response = await fetch(`${API_URL}/api/users/link`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    telegramId: telegramUser.id.toString(),
-                    walletAddress: account.address,
-                    username: telegramUser.username,
-                }),
+            // Call API to link wallet using axios
+            const response = await userApi.linkWallet({
+                telegramId: telegramUser.id.toString(),
+                walletAddress: account.address,
+                username: telegramUser.username,
             });
 
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to link wallet');
+            if (!response.data.success) {
+                throw new Error(response.data.error || 'Failed to link wallet');
             }
 
-            console.log('Wallet linked successfully:', data.data);
+            console.log('Wallet linked successfully:', response.data.data);
             setIsLinked(true);
             // Fetch summary after successful linking
             fetchSummary();
         } catch (error: any) {
             console.error('Failed to verify/link wallet:', error);
-            setLinkError(error.message || 'Failed to verify wallet');
+            const errorMsg = error.response?.data?.error || error.message || 'Failed to verify wallet';
+            setLinkError(errorMsg);
         } finally {
             setIsLinking(false);
         }
@@ -132,13 +126,14 @@ export default function DashboardPage() {
         if (!telegramUser?.id) return;
 
         try {
-            // Fetch debts
-            const debtsRes = await fetch(`${API_URL}/api/users/${telegramUser.id}/debts`);
-            const debtsData = await debtsRes.json();
+            // Fetch debts and receivables using axios
+            const [debtsRes, recRes] = await Promise.all([
+                userApi.getDebts(telegramUser.id),
+                userApi.getReceivables(telegramUser.id),
+            ]);
 
-            // Fetch receivables
-            const recRes = await fetch(`${API_URL}/api/users/${telegramUser.id}/receivables`);
-            const recData = await recRes.json();
+            const debtsData = debtsRes.data;
+            const recData = recRes.data;
 
             const totalOwed = debtsData.data?.reduce((sum: bigint, d: any) =>
                 sum + BigInt(d.principalAmount) - BigInt(d.amountPaid), BigInt('0')) || BigInt('0');

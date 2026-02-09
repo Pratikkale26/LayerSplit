@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Receipt, ArrowUpRight, ArrowDownLeft, Calendar, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { paymentsApi } from '@/lib/api';
 
 interface Transaction {
     id: string;
@@ -51,8 +50,8 @@ export default function HistoryPage() {
             setLoading(true);
             setError('');
 
-            const response = await fetch(`${API_URL}/api/payments/history/${telegramUser.id}`);
-            const data = await response.json();
+            const response = await paymentsApi.getHistory(telegramUser.id);
+            const data = response.data;
 
             if (data.success && data.data) {
                 // Transform API data to Transaction format

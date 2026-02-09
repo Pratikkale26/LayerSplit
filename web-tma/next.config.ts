@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     // simply setting the position is the safest 'valid' way to keep the object
     position: 'bottom-right',
   },
-  
+
   // Keep your logic for the HMR WebSocket if you're using Option 1 (Webpack)
   webpack: (config, { dev, isServer }) => {
     if (dev && !isServer) {
@@ -29,7 +29,8 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        // Fallback to localhost only in development
+        // This runs on the server, so localhost IS reachable
+        // Use BACKEND_URL env var for flexibility, default to localhost:3001
         destination: `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/:path*`,
       },
     ];

@@ -5,8 +5,7 @@ import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-ki
 import { motion } from 'framer-motion';
 import { ArrowLeft, Users, DollarSign, FileText, Check, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { billsApi } from '@/lib/api';
 
 type SplitType = 'EQUAL' | 'CUSTOM';
 
@@ -87,24 +86,20 @@ export default function CreateBillPage() {
         try {
             setError('');
 
-            const response = await fetch(`${API_URL}/api/bills`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title,
-                    totalAmount: (parseFloat(totalAmount) * 1_000_000_000).toString(),
-                    splitType,
-                    creatorTelegramId: telegramUser.id.toString(),
-                    debtors: participants.map(p => ({
-                        telegramId: p.telegramId || p.username,
-                        amount: splitType === 'CUSTOM' && p.amount
-                            ? (parseFloat(p.amount) * 1_000_000_000).toString()
-                            : undefined,
-                    })),
-                }),
+            const response = await billsApi.create({
+                title,
+                totalAmount: (parseFloat(totalAmount) * 1_000_000_000).toString(),
+                splitType,
+                creatorTelegramId: telegramUser.id.toString(),
+                debtors: participants.map(p => ({
+                    telegramId: p.telegramId || p.username,
+                    amount: splitType === 'CUSTOM' && p.amount
+                        ? (parseFloat(p.amount) * 1_000_000_000).toString()
+                        : undefined,
+                })),
             });
 
-            const data = await response.json();
+            const data = response.data;
 
             if (!data.success) {
                 throw new Error(data.error || 'Failed to create bill');
@@ -118,7 +113,7 @@ export default function CreateBillPage() {
 
             setSuccess(true);
         } catch (err: any) {
-            setError(err.message || 'Failed to create bill');
+            setError(err.response?.data?.error || err.message || 'Failed to create bill');
         }
     };
 

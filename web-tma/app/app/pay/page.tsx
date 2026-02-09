@@ -5,8 +5,7 @@ import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-ki
 import { motion } from 'framer-motion';
 import { ArrowLeft, Check, Loader2, AlertCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { userApi, paymentsApi } from '@/lib/api';
 
 interface Debt {
     id: string;
@@ -66,16 +65,15 @@ export default function PayPage() {
 
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/users/${telegramUser.id}/debts`);
-            const data = await response.json();
+            const response = await userApi.getDebts(telegramUser.id);
+            const data = response.data;
 
             if (data.success && data.data) {
                 const debtsWithInterest = await Promise.all(
                     data.data.map(async (debt: Debt) => {
                         try {
-                            const intRes = await fetch(`${API_URL}/api/payments/interest/${debt.id}`);
-                            const intData = await intRes.json();
-                            return { ...debt, interest: intData.data };
+                            const intRes = await paymentsApi.getInterest(debt.id);
+                            return { ...debt, interest: intRes.data.data };
                         } catch {
                             return debt;
                         }
@@ -105,19 +103,15 @@ export default function PayPage() {
         setError('');
 
         try {
-            const response = await fetch(`${API_URL}/api/payments/pay`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    debtId: debt.id,
-                    suiDebtObjectId: debt.suiObjectId,
-                    suiBillObjectId: debt.bill.suiObjectId,
-                    paymentCoinId: 'TODO',
-                    payFull: true,
-                }),
+            const response = await paymentsApi.pay({
+                debtId: debt.id,
+                suiDebtObjectId: debt.suiObjectId,
+                suiBillObjectId: debt.bill.suiObjectId,
+                paymentCoinId: 'TODO',
+                payFull: true,
             });
 
-            const data = await response.json();
+            const data = response.data;
 
             if (!data.success) {
                 throw new Error(data.error || 'Failed to build transaction');
@@ -127,20 +121,16 @@ export default function PayPage() {
                 transaction: data.data.transactionBytes,
             });
 
-            await fetch(`${API_URL}/api/payments/confirm`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    debtId: debt.id,
-                    transactionDigest: result.digest,
-                    amountPaid: debt.interest?.totalDue || debt.principalAmount,
-                }),
+            await paymentsApi.confirm({
+                debtId: debt.id,
+                transactionDigest: result.digest,
+                amountPaid: debt.interest?.totalDue || debt.principalAmount,
             });
 
             setSuccess(true);
             fetchDebts();
         } catch (err: any) {
-            setError(err.message || 'Payment failed');
+            setError(err.response?.data?.error || err.message || 'Payment failed');
         } finally {
             setPayingId(null);
         }
