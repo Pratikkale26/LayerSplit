@@ -96,8 +96,9 @@ function SignPageContent() {
 
             console.log('Transaction result:', result);
 
-            // Query transaction to get created objects (debt object IDs)
+            // Query transaction to get created objects (bill and debt object IDs)
             let debtObjectIds: { debtorAddress: string; objectId: string }[] = [];
+            let billSuiObjectId: string | undefined;
 
             try {
                 // Wait for transaction and get full details with object changes
@@ -111,6 +112,17 @@ function SignPageContent() {
                 console.log('Transaction details:', txDetails);
 
                 if (txDetails.objectChanges) {
+                    // Extract Bill object ID (shared object)
+                    const createdBill = txDetails.objectChanges.find((change: any) =>
+                        change.type === 'created' &&
+                        change.objectType?.includes('::types::Bill')
+                    ) as any;
+
+                    if (createdBill) {
+                        billSuiObjectId = createdBill.objectId;
+                        console.log('Extracted bill object ID:', billSuiObjectId);
+                    }
+
                     // Filter for created Debt objects
                     const createdDebts = txDetails.objectChanges.filter((change: any) =>
                         change.type === 'created' &&
@@ -129,12 +141,13 @@ function SignPageContent() {
                 }
             } catch (queryErr) {
                 console.error('Failed to query transaction details:', queryErr);
-                // Continue anyway - backend will just not have debt object IDs
+                // Continue anyway - backend will just not have object IDs
             }
 
-            // Confirm with backend
+            // Confirm with backend - include billSuiObjectId
             await api.post(`/api/bills/${billId}/confirm`, {
                 transactionDigest: result.digest,
+                suiObjectId: billSuiObjectId,  // The actual Bill object ID
                 debtObjectIds: debtObjectIds.length > 0 ? debtObjectIds : undefined,
             });
 
