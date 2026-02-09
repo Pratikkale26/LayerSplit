@@ -46,6 +46,15 @@ export function createApp(): Application {
     app.use("/api/bills", billRoutes);
     app.use("/api/payments", paymentRoutes);
 
+    // Telegram webhook (production only - handled by webhookCallback from telegraf)
+    if (env.NODE_ENV === 'production') {
+        // Import dynamically to avoid circular dependency issues
+        import("./bot/telegram.js").then(({ webhookCallback }) => {
+            app.post('/api/telegram-webhook', webhookCallback);
+            console.log("📡 Telegram webhook route registered: POST /api/telegram-webhook");
+        });
+    }
+
     // Error handling
     app.use(notFoundHandler);
     app.use(errorHandler);

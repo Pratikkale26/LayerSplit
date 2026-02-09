@@ -16,8 +16,8 @@ app.listen(PORT, () => {
 ╚════════════════════════════════════════════════════╝
   `);
 
-    // Start Telegram bot in polling mode (dev)
-    if (env.NODE_ENV !== "production") {
-        startBot();
-    }
+    // Start Telegram bot
+    // Development: uses polling mode
+    // Production: uses webhook mode (set via TMA_URL)
+    startBot();
 });

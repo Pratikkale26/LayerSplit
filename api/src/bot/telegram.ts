@@ -473,18 +473,49 @@ bot.command("split", async (ctx) => {
 // Track if bot is running
 let isRunning = false;
 
-// Start bot
-export function startBot() {
-    bot
-        .launch()
-        .then(() => {
+// Start bot - uses webhook in production, polling in development
+export async function startBot() {
+    const isProduction = env.NODE_ENV === 'production';
+
+    if (isProduction) {
+        // PRODUCTION: Use webhook mode
+        // The webhook will be handled by Express in index.ts
+        // We just need to set the webhook URL with Telegram
+        const webhookUrl = `${env.TMA_URL.replace(/\/$/, '')}/api/telegram-webhook`;
+
+        try {
+            // Delete any existing webhook first
+            await bot.telegram.deleteWebhook();
+
+            // Set the new webhook
+            await bot.telegram.setWebhook(webhookUrl);
+
+            console.log(`🤖 Telegram bot webhook set to: ${webhookUrl}`);
             isRunning = true;
-            console.log("🤖 Telegram bot started in polling mode");
-        })
-        .catch((err) => {
-            console.error("Failed to start bot:", err);
-        });
+        } catch (err) {
+            console.error("Failed to set webhook:", err);
+            // Fallback to polling if webhook fails
+            console.log("Falling back to polling mode...");
+            await bot.launch();
+            isRunning = true;
+            console.log("🤖 Telegram bot started in polling mode (fallback)");
+        }
+    } else {
+        // DEVELOPMENT: Use polling mode
+        bot
+            .launch()
+            .then(() => {
+                isRunning = true;
+                console.log("🤖 Telegram bot started in polling mode (development)");
+            })
+            .catch((err) => {
+                console.error("Failed to start bot:", err);
+            });
+    }
 }
+
+// Export webhook callback for Express
+export const webhookCallback = bot.webhookCallback('/api/telegram-webhook');
 
 // Graceful shutdown - only stop if bot is running
 const gracefulShutdown = (signal: string) => {
@@ -498,3 +529,4 @@ const gracefulShutdown = (signal: string) => {
 
 process.once("SIGINT", () => gracefulShutdown("SIGINT"));
 process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
