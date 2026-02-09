@@ -9,7 +9,7 @@ const envSchema = z.object({
     PACKAGE_ID: z.string(),
     CORS_ORIGIN: z.string().default("*"),
     TELEGRAM_BOT_TOKEN: z.string(),
-    TMA_URL: z.string().default("https://layersplit.vercel.app"),
+    TMA_URL: z.string().default("https://artistic-marcelene-parodiable.ngrok-free.dev"),
 });
 
 export const env = envSchema.parse(process.env);

@@ -1,6 +1,9 @@
 {
   "name": "proxy",
   "private": true,
+  "scripts": {
+    "dev": "bun proxy.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

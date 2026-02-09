@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCurrentAccount, ConnectButton, useConnectWallet, useWallets } from '@mysten/dapp-kit';
+import { useCurrentAccount, ConnectButton, useSignPersonalMessage } from '@mysten/dapp-kit';
 import { motion } from 'framer-motion';
-import { Wallet, Receipt, ArrowUpRight, ArrowDownLeft, Plus, History, Settings } from 'lucide-react';
+import { Wallet, Receipt, ArrowUpRight, ArrowDownLeft, Plus, History, Settings, Shield, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 // API base URL
@@ -18,9 +18,12 @@ interface DebtSummary {
 
 export default function DashboardPage() {
     const account = useCurrentAccount();
+    const { mutateAsync: signMessage, isPending: isSigning } = useSignPersonalMessage();
+
     const [summary, setSummary] = useState<DebtSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [isLinking, setIsLinking] = useState(false);
+    const [isLinked, setIsLinked] = useState(false);
     const [linkError, setLinkError] = useState<string | null>(null);
 
     // Get Telegram user from WebApp
@@ -40,51 +43,90 @@ export default function DashboardPage() {
         setLoading(false);
     }, []);
 
-    // Link wallet to database when both account and telegramUser are available
+    // Check if user is already linked when account changes
     useEffect(() => {
-        const linkWallet = async () => {
-            if (!account?.address || !telegramUser?.id) return;
-
-            setIsLinking(true);
-            setLinkError(null);
+        const checkLinkedStatus = async () => {
+            if (!telegramUser?.id) return;
 
             try {
-                const response = await fetch(`${API_URL}/api/users/link`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegramId: telegramUser.id.toString(),
-                        walletAddress: account.address,
-                        username: telegramUser.username,
-                    }),
-                });
-
+                const response = await fetch(`${API_URL}/api/users/${telegramUser.id}`);
                 const data = await response.json();
 
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to link wallet');
+                if (data.success && data.data?.walletAddress) {
+                    // User exists and has wallet linked
+                    if (account?.address && data.data.walletAddress === account.address) {
+                        setIsLinked(true);
+                    } else {
+                        setIsLinked(false);
+                    }
+                } else {
+                    setIsLinked(false);
                 }
-
-                console.log('Wallet linked successfully:', data.data);
-                // Fetch summary after successful linking
-                fetchSummary();
-            } catch (error: any) {
-                console.error('Failed to link wallet:', error);
-                setLinkError(error.message || 'Failed to link wallet');
-            } finally {
-                setIsLinking(false);
+            } catch (error) {
+                // User not found or error - not linked
+                setIsLinked(false);
             }
         };
 
-        linkWallet();
-    }, [account?.address, telegramUser?.id]);
+        checkLinkedStatus();
+    }, [telegramUser?.id, account?.address]);
 
-    // Fetch user summary when account is connected
+    // Verify wallet ownership by signing a message, then link to database
+    const verifyAndLinkWallet = async () => {
+        if (!account?.address || !telegramUser?.id) {
+            setLinkError('Please connect wallet and open in Telegram');
+            return;
+        }
+
+        setIsLinking(true);
+        setLinkError(null);
+
+        try {
+            // Create a message to sign
+            const message = `Verify wallet ownership for LayerSplit\n\nTelegram ID: ${telegramUser.id}\nWallet: ${account.address}\nTimestamp: ${Date.now()}`;
+
+            // Ask user to sign the message
+            const { signature } = await signMessage({
+                message: new TextEncoder().encode(message),
+            });
+
+            console.log('Signature obtained:', signature);
+
+            // Call API to link wallet (signature proves ownership)
+            const response = await fetch(`${API_URL}/api/users/link`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    telegramId: telegramUser.id.toString(),
+                    walletAddress: account.address,
+                    username: telegramUser.username,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to link wallet');
+            }
+
+            console.log('Wallet linked successfully:', data.data);
+            setIsLinked(true);
+            // Fetch summary after successful linking
+            fetchSummary();
+        } catch (error: any) {
+            console.error('Failed to verify/link wallet:', error);
+            setLinkError(error.message || 'Failed to verify wallet');
+        } finally {
+            setIsLinking(false);
+        }
+    };
+
+    // Fetch user summary
     useEffect(() => {
-        if (telegramUser?.id) {
+        if (telegramUser?.id && isLinked) {
             fetchSummary();
         }
-    }, [telegramUser]);
+    }, [telegramUser?.id, isLinked]);
 
     const fetchSummary = async () => {
         if (!telegramUser?.id) return;
@@ -173,21 +215,54 @@ export default function DashboardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="mx-4 mt-6 p-4 rounded-2xl bg-white/5 border border-white/10"
                 >
-                    <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${linkError ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
-                            <Wallet className={`w-5 h-5 ${linkError ? 'text-red-400' : 'text-green-400'}`} />
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-400">
-                                {isLinking ? 'Linking...' : linkError ? 'Link Failed' : 'Connected'}
-                            </p>
-                            <p className="font-mono text-sm">
-                                {account.address.slice(0, 8)}...{account.address.slice(-6)}
-                            </p>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${isLinked ? 'bg-green-500/20' : linkError ? 'bg-red-500/20' : 'bg-yellow-500/20'}`}>
+                                {isLinked ? (
+                                    <Shield className="w-5 h-5 text-green-400" />
+                                ) : (
+                                    <Wallet className={`w-5 h-5 ${linkError ? 'text-red-400' : 'text-yellow-400'}`} />
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-400">
+                                    {isLinked ? 'Verified & Linked' : 'Wallet Connected'}
+                                </p>
+                                <p className="font-mono text-sm">
+                                    {account.address.slice(0, 8)}...{account.address.slice(-6)}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    {linkError && (
-                        <p className="mt-2 text-sm text-red-400">{linkError}</p>
+
+                    {/* Show verify button if not linked */}
+                    {!isLinked && (
+                        <div className="mt-4">
+                            {!telegramUser ? (
+                                <p className="text-sm text-yellow-400">⚠️ Please open this app in Telegram to link your wallet</p>
+                            ) : (
+                                <button
+                                    onClick={verifyAndLinkWallet}
+                                    disabled={isLinking || isSigning}
+                                    className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-600 font-medium transition flex items-center justify-center gap-2"
+                                >
+                                    {isLinking || isSigning ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            {isSigning ? 'Sign in wallet...' : 'Linking...'}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Shield className="w-4 h-4" />
+                                            Verify & Link Wallet
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                            {linkError && (
+                                <p className="mt-2 text-sm text-red-400">{linkError}</p>
+                            )}
+                        </div>
                     )}
                 </motion.div>
             )}
