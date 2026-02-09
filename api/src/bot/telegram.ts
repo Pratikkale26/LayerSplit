@@ -341,27 +341,44 @@ bot.command("split", async (ctx) => {
         confirmMsg += `\n⚠️ _${unlinkedUsers.join(", ")} need to link wallets_\n`;
     }
 
-    confirmMsg += `\n👆 Click below to sign the on-chain transaction:`;
+    // Reply in group with bill details
+    await ctx.reply(
+        confirmMsg + `\n\n📩 _Check your DM to sign the transaction!_`,
+        { parse_mode: "Markdown" }
+    );
 
-    // Get bot username for deep link
-    const botUsername = ctx.botInfo?.username || 'layersplit_bot';
-
-    // Send confirmation with signing button
-    // Using TMA deep link format: opens TMA inside Telegram
-    await ctx.reply(confirmMsg, {
-        parse_mode: "Markdown",
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    {
-                        text: "✍️ Sign & Create On-Chain",
-                        // TMA deep link format - opens Mini App inside Telegram
-                        url: `https://t.me/${botUsername}?startapp=sign_${bill.id}`,
-                    },
-                ],
-            ],
-        },
-    });
+    // Send DM with web_app button (web_app buttons ONLY work in private chats)
+    try {
+        await bot.telegram.sendMessage(
+            telegramId,
+            `📝 *Sign Bill: ${description}*\n\n` +
+            `💵 Amount: ${amount} SUI\n` +
+            `👥 Split with: ${mentions.map(m => `@${m.username}`).join(", ")}\n\n` +
+            `Click below to sign and create the on-chain bill:`,
+            {
+                parse_mode: "Markdown",
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: "✍️ Sign & Create On-Chain",
+                                web_app: { url: `${env.TMA_URL}/app/sign?billId=${bill.id}` },
+                            },
+                        ],
+                    ],
+                },
+            }
+        );
+    } catch (err) {
+        // User hasn't started the bot or blocked DMs
+        console.error("Failed to send DM:", err);
+        await ctx.reply(
+            `⚠️ I couldn't DM you! Please start me first:\n` +
+            `1. Open @${ctx.botInfo?.username || "layersplit_bot"} in DM\n` +
+            `2. Send /start\n` +
+            `3. Then try /split again`
+        );
+    }
 });
 
 // Track if bot is running
