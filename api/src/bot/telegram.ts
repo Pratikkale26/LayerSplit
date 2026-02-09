@@ -222,9 +222,8 @@ bot.command("split", async (ctx) => {
                     [
                         {
                             text: "➕ Create Bill",
-                            web_app: {
-                                url: `${env.TMA_URL}/app/create?amount=${amountMist}&title=${encodeURIComponent(description)}&groupId=${chatId}`,
-                            },
+                            // Use url button instead of web_app for group chat compatibility
+                            url: `https://t.me/${ctx.botInfo?.username}?startapp=create_${amountMist}_${encodeURIComponent(description)}_${chatId}`,
                         },
                     ],
                 ],

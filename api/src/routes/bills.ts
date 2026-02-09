@@ -53,13 +53,24 @@ router.post(
             const debtorUsers: { id: string; walletAddress: string }[] = [];
 
             for (const debtor of body.debtors) {
-                const user = await prisma.user.findUnique({
-                    where: { telegramId: BigInt(debtor.telegramId) },
-                });
+                let user;
+
+                // If telegramId looks like a number, look up by telegramId
+                // Otherwise, look up by username
+                if (debtor.telegramId && /^\d+$/.test(debtor.telegramId)) {
+                    user = await prisma.user.findUnique({
+                        where: { telegramId: BigInt(debtor.telegramId) },
+                    });
+                } else if (debtor.telegramId) {
+                    // It's a username, look up by username
+                    user = await prisma.user.findFirst({
+                        where: { username: debtor.telegramId.replace('@', '') },
+                    });
+                }
 
                 if (!user) {
                     throw new AppError(
-                        `Debtor ${debtor.telegramId} not found. They must link wallet first.`,
+                        `User "${debtor.telegramId}" not found. They must link their wallet first.`,
                         400
                     );
                 }

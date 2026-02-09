@@ -88,13 +88,14 @@ export default function CreateBillPage() {
 
             const response = await billsApi.create({
                 title,
-                totalAmount: (parseFloat(totalAmount) * 1_000_000_000).toString(),
+                // Use Math.floor to ensure clean integer (no floating point issues)
+                totalAmount: Math.floor(parseFloat(totalAmount) * 1_000_000_000).toString(),
                 splitType,
                 creatorTelegramId: telegramUser.id.toString(),
                 debtors: participants.map(p => ({
                     telegramId: p.telegramId || p.username,
                     amount: splitType === 'CUSTOM' && p.amount
-                        ? (parseFloat(p.amount) * 1_000_000_000).toString()
+                        ? Math.floor(parseFloat(p.amount) * 1_000_000_000).toString()
                         : undefined,
                 })),
             });
