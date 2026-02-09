@@ -16,6 +16,7 @@ function formatSui(mist: bigint): string {
 bot.start(async (ctx: Context) => {
     const telegramId = ctx.from?.id;
     const username = ctx.from?.username;
+    const chatType = ctx.chat?.type;
 
     if (!telegramId) return;
 
@@ -31,6 +32,35 @@ bot.start(async (ctx: Context) => {
             { parse_mode: "Markdown" }
         );
     } else {
+        // web_app buttons only work in private chats
+        if (chatType !== "private") {
+            await ctx.reply(
+                `🎉 Welcome to LayerSplit!\n\n` +
+                `Split bills with friends on Sui blockchain with 365% APR interest on late payments 💰\n\n` +
+                `👉 Please start me in DM to connect your wallet:\n` +
+                `@${ctx.botInfo?.username || "layersplit_bot"}`
+            );
+            // Try to send DM
+            try {
+                await bot.telegram.sendMessage(
+                    telegramId,
+                    `🎉 Welcome to LayerSplit!\n\n` +
+                    `Split bills with friends on Sui blockchain with 365% APR interest on late payments 💰\n\n` +
+                    `👉 Connect your wallet to get started:`,
+                    {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: "🔗 Connect Wallet", web_app: { url: `${env.TMA_URL}/?start=link` } }],
+                            ],
+                        },
+                    }
+                );
+            } catch (e) {
+                // User hasn't started the bot in DM yet
+            }
+            return;
+        }
+
         await ctx.reply(
             `🎉 Welcome to LayerSplit!\n\n` +
             `Split bills with friends on Sui blockchain with 365% APR interest on late payments 💰\n\n` +
@@ -38,12 +68,7 @@ bot.start(async (ctx: Context) => {
             {
                 reply_markup: {
                     inline_keyboard: [
-                        [
-                            {
-                                text: "🔗 Connect Wallet",
-                                web_app: { url: `${env.TMA_URL}/?start=link` },
-                            },
-                        ],
+                        [{ text: "🔗 Connect Wallet", web_app: { url: `${env.TMA_URL}/?start=link` } }],
                     ],
                 },
             }
