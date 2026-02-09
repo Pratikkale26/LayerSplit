@@ -55,17 +55,42 @@ export default function HistoryPage() {
 
             if (data.success && data.data) {
                 // Transform API data to Transaction format
-                const txs: Transaction[] = data.data.map((item: any) => ({
-                    id: item.id,
-                    type: item.type, // 'paid' or 'received'
-                    title: item.bill?.title || 'Payment',
-                    amount: formatSui(BigInt(item.amount || '0')),
-                    counterparty: item.counterparty?.username
-                        ? `@${item.counterparty.username}`
-                        : item.counterparty?.telegramId,
-                    date: new Date(item.createdAt).toISOString().split('T')[0],
-                    txDigest: item.transactionDigest,
-                }));
+                // API returns { paid: [...], received: [...] }
+                const txs: Transaction[] = [];
+
+                // Add paid debts
+                if (data.data.paid) {
+                    data.data.paid.forEach((item: any) => {
+                        txs.push({
+                            id: item.id,
+                            type: 'paid',
+                            title: item.billTitle || 'Payment',
+                            amount: formatSui(BigInt(item.amount || '0')),
+                            counterparty: item.to ? `@${item.to}` : undefined,
+                            date: new Date(item.date).toISOString().split('T')[0],
+                            txDigest: item.transactionDigest,
+                        });
+                    });
+                }
+
+                // Add received payments
+                if (data.data.received) {
+                    data.data.received.forEach((item: any) => {
+                        txs.push({
+                            id: item.id,
+                            type: 'received',
+                            title: item.billTitle || 'Payment',
+                            amount: formatSui(BigInt(item.amount || '0')),
+                            counterparty: item.from ? `@${item.from}` : undefined,
+                            date: new Date(item.date).toISOString().split('T')[0],
+                            txDigest: item.transactionDigest,
+                        });
+                    });
+                }
+
+                // Sort by date descending
+                txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
                 setTransactions(txs);
             } else {
                 setTransactions([]);
