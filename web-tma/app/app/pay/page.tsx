@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Check, Loader2, AlertCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
@@ -119,8 +120,12 @@ export default function PayPage() {
                 throw new Error(data.error || 'Failed to build transaction');
             }
 
+            // Parse JSON transaction and create Transaction object (like sign page)
+            const txData = JSON.parse(data.data.transactionBytes);
+            const tx = Transaction.from(txData);
+
             const result = await signAndExecute({
-                transaction: data.data.transactionBytes,
+                transaction: tx,
             });
 
             await paymentsApi.confirm({
