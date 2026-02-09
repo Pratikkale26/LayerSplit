@@ -118,27 +118,38 @@ export async function buildCreateCustomSplitPtb(params: {
     return JSON.stringify(await tx.toJSON());
 }
 
-// Build PTB for paying a debt
-export function buildPayDebtPtb(params: {
-    debtObjectId: string;
-    coinId: string;
-    amount: bigint;
-    creditorAddress: string;
-}): string {
+// Build PTB for paying a debt in full
+export async function buildPayDebtPtb(params: {
+    debtObjectId: string;    // Debt object ID (owned by debtor)
+    billObjectId: string;    // Bill object ID (shared object)
+    amount: bigint;          // Amount to pay in MIST
+    payerAddress: string;    // Payer's wallet address (for receipt)
+}): Promise<string> {
     const tx = new Transaction();
 
-    // Split coin for payment
-    const [paymentCoin] = tx.splitCoins(tx.object(params.coinId), [
+    // Split payment coin from gas
+    const [paymentCoin] = tx.splitCoins(tx.gas, [
         tx.pure.u64(params.amount),
     ]);
 
-    tx.moveCall({
-        target: `${PACKAGE_ID}::contract::pay_debt`,
+    // Call pay_debt_full which requires: debt, bill, clock, payment_coin
+    // Returns PaymentReceipt which we need to transfer
+    const [receipt] = tx.moveCall({
+        target: `${PACKAGE_ID}::contract::pay_debt_full`,
         arguments: [
-            tx.object(params.debtObjectId),
-            paymentCoin,
+            tx.object(params.debtObjectId),    // &mut Debt
+            tx.object(params.billObjectId),    // &mut Bill  
+            tx.object("0x6"),                  // &Clock
+            paymentCoin,                       // Coin<SUI>
         ],
     });
 
-    return Buffer.from(tx.serialize()).toString("base64");
+    // Transfer the payment receipt to the payer
+    tx.moveCall({
+        target: `${PACKAGE_ID}::payment::transfer_receipt`,
+        arguments: [receipt!],
+    });
+
+    // Return JSON string for API response (will be parsed by frontend)
+    return JSON.stringify(await tx.toJSON());
 }

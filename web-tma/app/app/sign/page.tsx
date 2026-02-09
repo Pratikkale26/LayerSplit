@@ -95,9 +95,36 @@ function SignPageContent() {
 
             console.log('Transaction result:', result);
 
+            // Query transaction to get created objects (debt object IDs)
+            // The result.effects?.created contains new objects but may not have owner info
+            // For now, we'll send the digest and backend can update later
+            // or query the transaction effects using a SuiClient
+
+            // Try to extract created object IDs from result
+            let debtObjectIds: { debtorAddress: string; objectId: string }[] = [];
+
+            // If result has objectChanges (from waitForTransaction), try to extract debt objects
+            const resultAny = result as any;
+            if (resultAny.objectChanges) {
+                // Filter for created Debt objects
+                const createdDebts = resultAny.objectChanges.filter((change: any) =>
+                    change.type === 'created' &&
+                    change.objectType?.includes('::types::Debt')
+                );
+
+                // Map to debtObjectIds format
+                debtObjectIds = createdDebts.map((change: any) => ({
+                    debtorAddress: change.owner?.AddressOwner || '',
+                    objectId: change.objectId,
+                })).filter((d: any) => d.debtorAddress);
+
+                console.log('Extracted debt object IDs:', debtObjectIds);
+            }
+
             // Confirm with backend
             await api.post(`/api/bills/${billId}/confirm`, {
                 transactionDigest: result.digest,
+                debtObjectIds: debtObjectIds.length > 0 ? debtObjectIds : undefined,
             });
 
             setTxDigest(result.digest);

@@ -134,6 +134,11 @@ router.get(
                         telegramId: d.creditor.telegramId.toString(),
                         username: d.creditor.username ?? undefined,
                     },
+                    bill: d.bill ? {
+                        id: d.bill.id,
+                        title: d.bill.title,
+                        suiObjectId: d.bill.suiObjectId ?? undefined,
+                    } : undefined,
                 })),
             });
         } catch (error) {

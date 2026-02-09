@@ -422,6 +422,11 @@ router.get(
 const confirmBillSchema = z.object({
     transactionDigest: z.string(),
     suiObjectId: z.string().optional(),
+    // Debt object IDs from transaction effects
+    debtObjectIds: z.array(z.object({
+        debtorAddress: z.string(),
+        objectId: z.string(),
+    })).optional(),
 });
 
 router.post(
@@ -459,6 +464,21 @@ router.post(
                     transactionDigest: body.transactionDigest,
                 },
             });
+
+            // Update debt objects with their on-chain IDs if provided
+            if (body.debtObjectIds && body.debtObjectIds.length > 0) {
+                for (const debtInfo of body.debtObjectIds) {
+                    const debtRecord = bill.debts.find(
+                        d => d.debtor.walletAddress.toLowerCase() === debtInfo.debtorAddress.toLowerCase()
+                    );
+                    if (debtRecord) {
+                        await prisma.debt.update({
+                            where: { id: debtRecord.id },
+                            data: { suiObjectId: debtInfo.objectId },
+                        });
+                    }
+                }
+            }
 
             // Send Telegram notifications
             const { bot } = await import("../bot/telegram.js");

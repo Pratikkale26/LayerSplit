@@ -62,15 +62,11 @@ export const paymentsApi = {
 
     pay: (data: {
         debtId: string;
-        suiDebtObjectId: string;
-        suiBillObjectId: string;
-        paymentCoinId: string;
-        payFull: boolean;
     }) => api.post('/api/payments/pay', data),
 
     confirm: (data: {
         debtId: string;
-        transactionDigest: string;
+        txDigest: string;
         amountPaid: string;
     }) => api.post('/api/payments/confirm', data),
 

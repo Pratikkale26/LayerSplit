@@ -98,10 +98,7 @@ export default function PayPage() {
             setError('Please connect your wallet first');
             return;
         }
-        if (!debt.suiObjectId) {
-            setError('This debt is not on-chain yet. The bill creator must sign first.');
-            return;
-        }
+        // Only check bill.suiObjectId - debt.suiObjectId is not currently set in our flow
         if (!debt.bill?.suiObjectId) {
             setError('This bill is pending - the creator must sign it first.');
             return;
@@ -111,12 +108,9 @@ export default function PayPage() {
         setError('');
 
         try {
+            // Backend only needs debtId - it fetches everything else
             const response = await paymentsApi.pay({
                 debtId: debt.id,
-                suiDebtObjectId: debt.suiObjectId,
-                suiBillObjectId: debt.bill.suiObjectId,
-                paymentCoinId: 'TODO',
-                payFull: true,
             });
 
             const data = response.data;
@@ -131,7 +125,7 @@ export default function PayPage() {
 
             await paymentsApi.confirm({
                 debtId: debt.id,
-                transactionDigest: result.digest,
+                txDigest: result.digest,
                 amountPaid: debt.interest?.totalDue || debt.principalAmount,
             });
 
@@ -283,10 +277,10 @@ export default function PayPage() {
 
                             <button
                                 onClick={() => handlePay(debt)}
-                                disabled={payingId === debt.id || !account || !debt.suiObjectId || !debt.bill?.suiObjectId}
-                                className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${!debt.suiObjectId || !debt.bill?.suiObjectId
-                                        ? 'bg-yellow-500/20 text-yellow-400 cursor-not-allowed'
-                                        : 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed'
+                                disabled={payingId === debt.id || !account || !debt.bill?.suiObjectId}
+                                className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${!debt.bill?.suiObjectId
+                                    ? 'bg-yellow-500/20 text-yellow-400 cursor-not-allowed'
+                                    : 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed'
                                     }`}
                             >
                                 {payingId === debt.id ? (
@@ -294,7 +288,7 @@ export default function PayPage() {
                                         <Loader2 className="w-4 h-4 animate-spin" />
                                         Processing...
                                     </>
-                                ) : !debt.suiObjectId || !debt.bill?.suiObjectId ? (
+                                ) : !debt.bill?.suiObjectId ? (
                                     <>
                                         <Clock className="w-4 h-4" />
                                         Pending Signature

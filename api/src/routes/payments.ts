@@ -11,8 +11,6 @@ const router = Router();
 // Validation schemas
 const payDebtSchema = z.object({
     debtId: z.string(),
-    payerTelegramId: z.string(),
-    coinId: z.string(),
 });
 
 const confirmPaymentSchema = z.object({
@@ -69,10 +67,10 @@ router.post(
         try {
             const body = payDebtSchema.parse(req.body);
 
-            // Get debt
+            // Get debt with bill and debtor info
             const debt = await prisma.debt.findUnique({
                 where: { id: body.debtId },
-                include: { creditor: true, debtor: true },
+                include: { creditor: true, debtor: true, bill: true },
             });
 
             if (!debt) {
@@ -83,6 +81,20 @@ router.post(
                 throw new AppError("Debt already settled", 400);
             }
 
+            if (!debt.bill?.suiObjectId) {
+                throw new AppError("Bill not yet confirmed on-chain", 400);
+            }
+
+            // Debt must have suiObjectId - if not, we use a workaround
+            // The debt objects are transferred to debtors during bill creation
+            // We need to look up the debt object on-chain or use the debt ID
+            if (!debt.suiObjectId) {
+                throw new AppError(
+                    "Debt object ID not found. The debt may not have been created on-chain properly.",
+                    400
+                );
+            }
+
             // Calculate amount with interest
             const interestInfo = calculateInterest(
                 debt.principalAmount,
@@ -90,18 +102,18 @@ router.post(
                 debt.createdAt
             );
 
-            // Build PTB
-            const ptbBytes = buildPayDebtPtb({
-                debtObjectId: debt.suiObjectId ?? "",
-                coinId: body.coinId,
+            // Build PTB with all required objects
+            const ptbJson = await buildPayDebtPtb({
+                debtObjectId: debt.suiObjectId,
+                billObjectId: debt.bill.suiObjectId,
                 amount: BigInt(interestInfo.total),
-                creditorAddress: debt.creditor.walletAddress,
+                payerAddress: debt.debtor.walletAddress,
             });
 
             res.json({
                 success: true,
                 data: {
-                    transactionBytes: ptbBytes,
+                    transactionBytes: ptbJson,
                     message: `Pay ${interestInfo.total} MIST (${interestInfo.principal} principal + ${interestInfo.interest} interest)`,
                 },
             });
