@@ -94,8 +94,16 @@ export default function PayPage() {
     };
 
     const handlePay = async (debt: Debt) => {
-        if (!account || !debt.suiObjectId || !debt.bill?.suiObjectId) {
-            setError('Missing required data for payment');
+        if (!account) {
+            setError('Please connect your wallet first');
+            return;
+        }
+        if (!debt.suiObjectId) {
+            setError('This debt is not on-chain yet. The bill creator must sign first.');
+            return;
+        }
+        if (!debt.bill?.suiObjectId) {
+            setError('This bill is pending - the creator must sign it first.');
             return;
         }
 
@@ -275,13 +283,21 @@ export default function PayPage() {
 
                             <button
                                 onClick={() => handlePay(debt)}
-                                disabled={payingId === debt.id || !account}
-                                className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
+                                disabled={payingId === debt.id || !account || !debt.suiObjectId || !debt.bill?.suiObjectId}
+                                className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${!debt.suiObjectId || !debt.bill?.suiObjectId
+                                        ? 'bg-yellow-500/20 text-yellow-400 cursor-not-allowed'
+                                        : 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed'
+                                    }`}
                             >
                                 {payingId === debt.id ? (
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
                                         Processing...
+                                    </>
+                                ) : !debt.suiObjectId || !debt.bill?.suiObjectId ? (
+                                    <>
+                                        <Clock className="w-4 h-4" />
+                                        Pending Signature
                                     </>
                                 ) : (
                                     'Pay Now'
