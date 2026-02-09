@@ -481,7 +481,8 @@ export async function startBot() {
         // PRODUCTION: Use webhook mode
         // The webhook will be handled by Express in index.ts
         // We just need to set the webhook URL with Telegram
-        const webhookUrl = `${env.TMA_URL.replace(/\/$/, '')}/api/telegram-webhook`;
+        // Use API_URL (this server) for webhook, NOT TMA_URL (frontend)
+        const webhookUrl = `${env.API_URL.replace(/\/$/, '')}/api/telegram-webhook`;
 
         try {
             // Delete any existing webhook first
