@@ -9,8 +9,8 @@ const envSchema = z.object({
     PACKAGE_ID: z.string(),
     CORS_ORIGIN: z.string().default("*"),
     TELEGRAM_BOT_TOKEN: z.string(),
-    TMA_URL: z.string().default("https://artistic-marcelene-parodiable.ngrok-free.dev"),
-    API_URL: z.string().default("http://localhost:3001"), // URL of this API server
+    TMA_URL: z.string().default("https://layersplit.vercel.app/"),
+    API_URL: z.string().default("https://layersplit.onrender.com"), // URL of this API server
     BILL_REGISTRY_ID: z.string(), // Required for contract interaction
 });
 
