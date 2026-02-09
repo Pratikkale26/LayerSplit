@@ -1,67 +1,127 @@
 # LayerSplit API
 
-Backend API for LayerSplit Telegram Mini App.
+Express.js backend with Prisma ORM and Telegraf bot for the LayerSplit application.
 
-## Tech Stack
-- **Runtime**: Bun
-- **Framework**: Express.js
-- **Database**: PostgreSQL with Prisma ORM
-- **Blockchain**: Sui Testnet
+## 🛠️ Tech Stack
 
-## Setup
+- **Runtime:** Bun / Node.js 18+
+- **Framework:** Express 5
+- **Database:** PostgreSQL + Prisma 7
+- **Bot:** Telegraf 4.16
+- **Blockchain:** @mysten/sui SDK v2.3.1
 
-1. **Install dependencies**
-   ```bash
-   bun install
-   ```
+## 📁 Structure
 
-2. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your PostgreSQL connection string
-   ```
+```
+src/
+├── index.ts          # Server entry point
+├── app.ts            # Express app setup
+├── config/
+│   └── env.ts        # Environment validation (Zod)
+├── bot/
+│   └── telegram.ts   # Telegram bot commands & handlers
+├── routes/
+│   ├── users.ts      # User & wallet management
+│   ├── bills.ts      # Bill CRUD + signing
+│   ├── payments.ts   # Payment processing
+│   └── groups.ts     # Group management
+├── services/
+│   └── sui.ts        # PTB building, interest calculation
+├── middleware/
+│   └── error.ts      # Error handling
+└── db/
+    └── client.ts     # Prisma client
+```
 
-3. **Setup database**
-   ```bash
-   bun run db:generate  # Generate Prisma client
-   bun run db:push      # Push schema to database
-   ```
+## 🚀 Quick Start
 
-4. **Run development server**
-   ```bash
-   bun run dev
-   ```
+### 1. Install Dependencies
 
-## API Endpoints
+```bash
+bun install
+```
 
-### Health
-- `GET /health` - Server health check
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env with your values
+```
+
+Required variables:
+```env
+DATABASE_URL=postgresql://...
+TELEGRAM_BOT_TOKEN=...
+TMA_URL=https://...
+PACKAGE_ID=0x...
+BILL_REGISTRY_ID=0x...
+```
+
+### 3. Setup Database
+
+```bash
+bunx prisma db push      # Create tables
+bunx prisma generate     # Generate client
+```
+
+### 4. Run
+
+```bash
+# Development (with hot reload)
+bun run dev
+
+# Production
+bun run start
+```
+
+## 📡 API Endpoints
 
 ### Users
-- `POST /api/users/link` - Link Telegram ID to wallet
-- `GET /api/users/:telegramId` - Get user profile
-- `GET /api/users/:telegramId/debts` - Get user's debts
-- `GET /api/users/:telegramId/receivables` - Get debts owed to user
-
-### Groups
-- `POST /api/groups` - Create group
-- `GET /api/groups/:groupId` - Get group details
-- `POST /api/groups/:groupId/members` - Add member
-- `DELETE /api/groups/:groupId/members/:telegramId` - Remove member
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users/:telegramId` | Get user profile |
+| POST | `/api/users/link` | Link wallet to Telegram |
+| GET | `/api/users/:id/debts` | Get user's debts |
+| GET | `/api/users/:id/receivables` | Get debts owed to user |
 
 ### Bills
-- `POST /api/bills` - Create bill (returns PTB)
-- `GET /api/bills/:billId` - Get bill details
-- `GET /api/bills/group/:groupId` - Get bills in group
-- `PUT /api/bills/:billId` - Update bill
-- `DELETE /api/bills/:billId` - Cancel bill
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/bills` | Create new bill |
+| GET | `/api/bills/:id` | Get bill details |
+| GET | `/api/bills/:id/sign` | Get signing transaction |
+| POST | `/api/bills/:id/confirm` | Confirm signed bill |
 
 ### Payments
-- `POST /api/payments/pay` - Build payment PTB
-- `POST /api/payments/pay-all` - Build batch payment PTB
-- `POST /api/payments/confirm` - Confirm payment on-chain
-- `GET /api/payments/interest/:debtId` - Calculate current interest
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/payments/interest/:debtId` | Calculate current interest |
+| POST | `/api/payments/pay` | Get payment transaction |
+| POST | `/api/payments/confirm` | Confirm payment |
+| GET | `/api/payments/history/:telegramId` | Get payment history |
 
-## Deployed Contract
-- **Package ID**: `0x6787acdc7a371186179af5e036558f5e32506ad5a2dbefa79a359b47cfe48983`
-- **Network**: Sui Testnet
+## 🤖 Bot Commands
+
+| Command | Handler |
+|---------|---------|
+| `/start` | Welcome, wallet link prompt |
+| `/split <amount> <desc>` | Create bill in group |
+| `/status` | Show debts & receivables |
+| `/pay` | Open TMA to pay |
+| `/dashboard` | Open full dashboard |
+| `/help` | Show commands |
+
+## 🌐 Deployment (Render)
+
+1. Create Web Service from GitHub
+2. **Build Command:** `bun install && bunx prisma generate`
+3. **Start Command:** `bun run start`
+4. Set environment variables (see `.env.example`)
+
+### Production Mode
+- `NODE_ENV=production` enables webhook mode for bot
+- Set `API_URL` to your Render service URL
+
+## 📜 License
+
+MIT

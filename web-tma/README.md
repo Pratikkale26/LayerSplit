@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LayerSplit TMA
 
-## Getting Started
+Telegram Mini App frontend built with Next.js 16 and React 19.
 
-First, run the development server:
+## 🛠️ Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Framework:** Next.js 16 (App Router)
+- **React:** 19.2
+- **Styling:** Tailwind CSS 4
+- **Animation:** Framer Motion
+- **Wallet:** @mysten/dapp-kit + Slush Wallet
+- **Blockchain:** @mysten/sui SDK v2.3.1
+
+## 📁 Structure
+
+```
+app/
+├── layout.tsx         # Root layout
+├── page.tsx           # Landing page (redirect)
+├── providers.tsx      # Sui wallet providers
+└── app/               # TMA pages (protected)
+    ├── layout.tsx     # TMA layout
+    ├── page.tsx       # Dashboard
+    ├── pay/           # Pay debts
+    ├── sign/          # Sign bills
+    ├── history/       # Transaction history
+    └── settings/      # User settings
+
+components/
+├── ui/                # shadcn/ui components
+└── ...
+
+lib/
+├── api.ts             # Axios API client
+└── utils.ts           # Utility functions
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📱 TMA Pages
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Page | Path | Description |
+|------|------|-------------|
+| Dashboard | `/app` | Wallet connect, debt summary |
+| Pay | `/app/pay` | List debts, pay with interest |
+| Sign | `/app/sign/[billId]` | Sign bill on-chain |
+| History | `/app/history` | Payment transaction log |
+| Settings | `/app/settings` | Wallet & preferences |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🚀 Quick Start
 
-## Learn More
+### 1. Install
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+bun install
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Configure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cp .env.example .env
+# Edit .env:
+#   NEXT_PUBLIC_API_URL=http://localhost:3001
+```
 
-## Deploy on Vercel
+### 3. Run
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+# Development
+bun run dev
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Production build
+bun run build
+bun run start
+```
+
+## 🌐 Deployment (Vercel)
+
+```bash
+vercel --prod
+```
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_API_URL` | Backend API URL |
+| `BACKEND_URL` | Backend API URL (for rewrites) |
+
+### Next.js Config
+
+The `next.config.ts` includes:
+- API rewrites to backend (`/api/*` → backend)
+- ngrok config for local Telegram testing (dev only)
+
+## 🎨 UI Components
+
+Uses shadcn/ui with custom theming:
+- Dark mode by default
+- Glassmorphism effects
+- Framer Motion animations
+- Radix UI primitives
+
+## 💡 Telegram Integration
+
+```typescript
+// Access Telegram WebApp API
+if (window.Telegram?.WebApp) {
+    const webapp = window.Telegram.WebApp;
+    webapp.ready();
+    
+    const user = webapp.initDataUnsafe?.user;
+    // { id, username, first_name, ... }
+}
+```
+
+## 📜 License
+
+MIT
